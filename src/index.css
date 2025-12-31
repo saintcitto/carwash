@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+@theme {
+  --animate-spin-slow: spin 3s linear infinite;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-slate-50);
+    color: var(--color-slate-800);
+  }
+}
