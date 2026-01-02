@@ -57,7 +57,7 @@ const App = () => {
   const [printDailySummary, setPrintDailySummary] = useState(false);
 
   const HARGA_FULL = 50000;
-  const HARGA_BODY = 35000;
+  const HARGA_BODY = 40000;
 
   // --- EFFECTS ---
   useEffect(() => {
