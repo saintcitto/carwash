@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Car, Sparkles, Save, Phone, Smartphone, CheckCircle, Clock, Calendar, History, Filter, Printer, Receipt, Hash, Wallet } from 'lucide-react';
 
-// --- KONFIGURASI GAJI TETAP (HARD-CODED & LOCKED) ---
-// Nilai ini MUTLAK dan tidak boleh berubah berdasarkan jumlah mobil atau hari.
-const FIXED_SALARIES = [
-  { name: 'Aci Evi', amount: 85000 },
-  { name: 'Tomy', amount: 85000 },
-  { name: 'Usuf', amount: 63750 },
-  { name: 'Rio', amount: 59500 },
-  { name: 'Paijo', amount: 59500 },
-];
+// --- KONFIGURASI TARIF PER LAYANAN (AUDITED & LOCKED) ---
+// Tarif ini menghasilkan Total Gaji Anggota Rp 352.750 pada omset Rp 850.000 (17 mobil full).
+const SERVICE_RATES = {
+  'Aci Evi':   { Full: 5000, Body: 5000 },
+  'Bang Tomy': { Full: 5000, Body: 4000 },
+  'Usuf':      { Full: 3750, Body: 2500 },
+  'Rio':       { Full: 3500, Body: 2500 },
+  'Paijo':     { Full: 3500, Body: 2500 },
+};
 
-// Total Gaji Anggota Wajib: Rp 352.750
-// Dihitung sekali saat inisialisasi untuk konsistensi.
-const TOTAL_FIXED_SALARY = FIXED_SALARIES.reduce((acc, curr) => acc + curr.amount, 0);
+const EMPLOYEES_LIST = Object.keys(SERVICE_RATES);
 
 const App = () => {
   // --- HELPERS ---
@@ -43,9 +41,9 @@ const App = () => {
 
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [showAllHistory, setShowAllHistory] = useState(false);
-  const [dailyExpense, setDailyExpense] = useState(0); // Input Pengeluaran Manual (Display Only)
+  const [dailyExpense, setDailyExpense] = useState(0); 
   
-  // Form Data (Pencuci DIHAPUS dari sini sesuai instruksi)
+  // HAPUS FIELD WASHER DARI STATE FORM
   const [formData, setFormData] = useState({ 
     plat: '', 
     telepon: '', 
@@ -142,38 +140,41 @@ const App = () => {
   // 2. Hitung Omset (ANGKA UTAMA)
   const totalUnit = filteredLaporan.length || 0;
   
-  // Total Uang Masuk (Paid)
+  // Hitung jumlah tipe layanan untuk kalkulasi gaji
+  const countFull = filteredLaporan.filter(l => l.tipe === 'Full').length || 0;
+  const countBody = filteredLaporan.filter(l => l.tipe === 'Body').length || 0;
+
   const totalMasuk = filteredLaporan
     .filter(l => l.status === 'paid')
     .reduce((acc, curr) => acc + (Number(curr.harga) || 0), 0);
     
-  // Total Pending (Unpaid)
   const totalPending = filteredLaporan
     .filter(l => l.status === 'pending')
     .reduce((acc, curr) => acc + (Number(curr.harga) || 0), 0);
   
   // TOTAL OMSET HARIAN = Masuk + Pending
-  // Ini adalah "Single Source of Truth" untuk perhitungan selanjutnya.
   const totalOmzet = (totalMasuk + totalPending) || 0;
 
-  // 3. Hitung Gaji Anggota (FIXED / HARD-CODED VALUE)
-  // Aturan: Jika Omset > 0, Gaji Anggota = 352.750 (Total dari rincian tetap).
-  // Jika Omset = 0, Gaji = 0.
-  const isOperating = totalOmzet > 0;
-  
-  const salaryList = FIXED_SALARIES.map(emp => ({
-    name: emp.name,
-    amount: isOperating ? Number(emp.amount) : 0
-  }));
+  // 3. Hitung Pembagian Anggota (BERBASIS LAYANAN)
+  // Tidak ada input pencuci, semua anggota dapat bagian sesuai tarif layanan per mobil.
+  const memberShares = EMPLOYEES_LIST.map(name => {
+    const rates = SERVICE_RATES[name];
+    const shareFromFull = countFull * rates.Full;
+    const shareFromBody = countBody * rates.Body;
+    const totalShare = shareFromFull + shareFromBody;
+    
+    return { name, amount: totalShare };
+  });
 
-  // Variabel Terkunci: Total Gaji Anggota
-  const totalGajiAnggota = isOperating ? TOTAL_FIXED_SALARY : 0;
+  // TOTAL PEMBAGIAN ANGGOTA
+  const totalPembagianAnggota = memberShares.reduce((acc, curr) => acc + curr.amount, 0);
 
   // 4. Hitung Pendapatan Owner (PALING TERAKHIR)
-  // Rumus Wajib: Pendapatan Owner = Total Omset − Total Gaji Anggota
-  const pendapatanOwnerGross = (totalOmzet - totalGajiAnggota) || 0;
+  // Rumus Wajib: Pendapatan Owner = Total Omset − Total Pembagian Anggota
+  const pendapatanOwnerGross = (totalOmzet - totalPembagianAnggota) || 0;
   
   // Rumus Akhir (Sisa Bersih): Pendapatan Owner - Pengeluaran Harian
+  // Pengeluaran diperlakukan sebagai angka positif yang mengurangi kas.
   const pendapatanOwnerNet = (pendapatanOwnerGross - (Number(dailyExpense) || 0)) || 0;
 
   const formatDateDisplay = (dateStr) => {
@@ -282,7 +283,7 @@ const App = () => {
         </div>
       )}
 
-      {/* --- 2. STRUK LAPORAN HARIAN (80MM - FIXED LOGIC) --- */}
+      {/* --- 2. STRUK LAPORAN HARIAN (80MM - AUDIT LOGIC) --- */}
       {printDailySummary && (
         <div className="receipt-container">
           <div className="text-center mb-2">
@@ -306,14 +307,14 @@ const App = () => {
           
           <div className="dashed-line"></div>
 
-          {/* RINCIAN GAJI ANGGOTA (FIXED) */}
+          {/* RINCIAN PEMBAGIAN ANGGOTA */}
           <div className="text-center bold" style={{marginBottom: '4px'}}>
             -- PEMBAGIAN ANGGOTA --
           </div>
           
           <table className="receipt-table">
             <tbody>
-              {salaryList.map((emp, idx) => (
+              {memberShares.map((emp, idx) => (
                 <tr key={idx}>
                   <td>{emp.name}</td>
                   <td className="text-right">Rp {emp.amount.toLocaleString()}</td>
@@ -323,8 +324,8 @@ const App = () => {
           </table>
 
           <div style={{borderTop: '1px solid black', marginTop: '5px', paddingTop: '2px', display: 'flex', justifyContent: 'space-between'}} className="bold">
-            <span>TOTAL GAJI:</span>
-            <span>Rp {totalGajiAnggota.toLocaleString()}</span>
+            <span>TOTAL PEMBAGIAN:</span>
+            <span>Rp {totalPembagianAnggota.toLocaleString()}</span>
           </div>
 
           <div className="dashed-line"></div>
@@ -339,8 +340,8 @@ const App = () => {
             <span>Rp {totalOmzet.toLocaleString()}</span>
           </div>
           <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
-            <span>(-) Total Gaji:</span>
-            <span>Rp {totalGajiAnggota.toLocaleString()}</span>
+            <span>(-) Pembagian:</span>
+            <span>Rp {totalPembagianAnggota.toLocaleString()}</span>
           </div>
           <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
             <span>(-) Pengeluaran:</span>
@@ -348,7 +349,7 @@ const App = () => {
           </div>
           
           <div style={{borderTop: '2px solid black', marginTop: '5px', paddingTop: '5px', display: 'flex', justifyContent: 'space-between'}} className="text-lg bold">
-            <span>SISA BERSIH:</span>
+            <span>BERSIH OWNER:</span>
             <span>Rp {pendapatanOwnerNet.toLocaleString()}</span>
           </div>
 
@@ -500,37 +501,33 @@ const App = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredLaporan.length === 0 ? (
-                    <tr><td colSpan={showAllHistory ? 7 : 6} className="p-20 text-center text-slate-400 italic">Tidak ada data...</td></tr>
-                  ) : (
-                    filteredLaporan.map((item, index) => (
-                      <tr key={item.id} className={`hover:bg-slate-50 transition-all duration-300 group ${item.isNew ? 'new-row' : ''}`}>
-                        <td className="p-4 pl-6 text-slate-400 font-mono text-sm text-center">{index + 1}</td>
-                        <td className="p-4">
-                          <div className="font-bold text-slate-800 font-mono text-lg">{item.plat}</div>
-                          <div className="text-slate-500 text-xs flex flex-wrap items-center gap-2 mt-1">
-                            <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium border border-slate-200">{item.mobil}</span>
-                            <span className="text-slate-500">{item.warna}</span>
-                          </div>
-                        </td>
-                        {showAllHistory && <td className="p-4 text-xs font-mono text-slate-500">{formatDateDisplay(item.date)}</td>}
-                        <td className="p-4 text-center">
-                          <button onClick={() => toggleStatus(item.id)} className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1 mx-auto shadow-sm no-print ${item.status === 'paid' ? 'bg-lime-100 text-lime-700 border-lime-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
-                            {item.status === 'paid' ? 'LUNAS' : 'PENDING'}
-                          </button>
-                          <span className="print-only hidden text-xs font-bold text-center">{item.status === 'paid' ? 'LUNAS' : 'BELUM BAYAR'}</span>
-                        </td>
-                        <td className="p-4 text-right"><div className="font-mono text-slate-700 font-bold">{item.harga.toLocaleString()}</div></td>
-                        <td className="p-4 text-center">
-                            {item.tipe === 'Full' ? <span className="text-[10px] font-extrabold text-lime-700 bg-lime-100 border border-lime-200 px-2 py-1 rounded-md inline-block">FULL</span> : <span className="text-[10px] font-extrabold text-cyan-700 bg-cyan-100 border border-cyan-200 px-2 py-1 rounded-md inline-block">BODY</span>}
-                        </td>
-                        <td className="p-4 text-center no-print flex items-center justify-center gap-2">
-                          <button onClick={() => handlePrintReceipt(item)} className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg" title="Print Struk"><Receipt size={18} /></button>
-                          <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg" title="Hapus"><Trash2 size={18} /></button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                  {filteredLaporan.map((item, index) => (
+                    <tr key={item.id} className={`hover:bg-slate-50 transition-all duration-300 group ${item.isNew ? 'new-row' : ''}`}>
+                      <td className="p-4 pl-6 text-slate-400 font-mono text-sm text-center">{index + 1}</td>
+                      <td className="p-4">
+                        <div className="font-bold text-slate-800 font-mono text-lg">{item.plat}</div>
+                        <div className="text-slate-500 text-xs flex flex-wrap items-center gap-2 mt-1">
+                          <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium border border-slate-200">{item.mobil}</span>
+                          <span className="text-slate-500">{item.warna}</span>
+                        </div>
+                      </td>
+                      {showAllHistory && <td className="p-4 text-xs font-mono text-slate-500">{formatDateDisplay(item.date)}</td>}
+                      <td className="p-4 text-center">
+                        <button onClick={() => toggleStatus(item.id)} className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1 mx-auto shadow-sm no-print ${item.status === 'paid' ? 'bg-lime-100 text-lime-700 border-lime-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                          {item.status === 'paid' ? 'LUNAS' : 'PENDING'}
+                        </button>
+                        <span className="print-only hidden text-xs font-bold text-center">{item.status === 'paid' ? 'LUNAS' : 'BELUM BAYAR'}</span>
+                      </td>
+                      <td className="p-4 text-right"><div className="font-mono text-slate-700 font-bold">{item.harga.toLocaleString()}</div></td>
+                      <td className="p-4 text-center">
+                          {item.tipe === 'Full' ? <span className="text-[10px] font-extrabold text-lime-700 bg-lime-100 border border-lime-200 px-2 py-1 rounded-md inline-block">FULL</span> : <span className="text-[10px] font-extrabold text-cyan-700 bg-cyan-100 border border-cyan-200 px-2 py-1 rounded-md inline-block">BODY</span>}
+                      </td>
+                      <td className="p-4 text-center no-print flex items-center justify-center gap-2">
+                        <button onClick={() => handlePrintReceipt(item)} className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg" title="Print Struk"><Receipt size={18} /></button>
+                        <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg" title="Hapus"><Trash2 size={18} /></button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
