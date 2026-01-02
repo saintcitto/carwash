@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Car, Sparkles, Save, Phone, Smartphone, CheckCircle, Clock, Calendar, History, Filter, Printer, Receipt, Hash, Wallet } from 'lucide-react';
 
 // --- KONFIGURASI TARIF PER LAYANAN (AUDITED & LOCKED) ---
-// Tarif ini menghasilkan Total Gaji Anggota Rp 352.750 pada omset Rp 850.000 (17 mobil full).
+// Skema pembagian nominal per transaksi untuk anggota.
 const SERVICE_RATES = {
   'Aci Evi':   { Full: 5000, Body: 5000 },
   'Bang Tomy': { Full: 5000, Body: 4000 },
   'Usuf':      { Full: 3750, Body: 2500 },
-  'Rio':       { Full: 3500, Body: 2500 },
-  'Paijo':     { Full: 3500, Body: 2500 },
+  'Rio':       { Full: 2500, Body: 2500 }, // Sesuai instruksi teks terbaru
+  'Paijo':     { Full: 2500, Body: 2500 }, // Sesuai instruksi teks terbaru
 };
 
 const EMPLOYEES_LIST = Object.keys(SERVICE_RATES);
@@ -43,7 +43,7 @@ const App = () => {
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [dailyExpense, setDailyExpense] = useState(0); 
   
-  // HAPUS FIELD WASHER DARI STATE FORM
+  // HAPUS FIELD WASHER DARI STATE FORM (Fitur Pencuci Dihilangkan)
   const [formData, setFormData] = useState({ 
     plat: '', 
     telepon: '', 
@@ -92,6 +92,7 @@ const App = () => {
       harga: harga,
       tipe: formData.tipe,
       status: formData.status,
+      // Field washer dihapus dari objek data
       isNew: true
     };
 
@@ -140,7 +141,7 @@ const App = () => {
   // 2. Hitung Omset (ANGKA UTAMA)
   const totalUnit = filteredLaporan.length || 0;
   
-  // Hitung jumlah tipe layanan untuk kalkulasi gaji
+  // Hitung jumlah tipe layanan untuk kalkulasi gaji (Service-Based)
   const countFull = filteredLaporan.filter(l => l.tipe === 'Full').length || 0;
   const countBody = filteredLaporan.filter(l => l.tipe === 'Body').length || 0;
 
@@ -155,8 +156,8 @@ const App = () => {
   // TOTAL OMSET HARIAN = Masuk + Pending
   const totalOmzet = (totalMasuk + totalPending) || 0;
 
-  // 3. Hitung Pembagian Anggota (BERBASIS LAYANAN)
-  // Tidak ada input pencuci, semua anggota dapat bagian sesuai tarif layanan per mobil.
+  // 3. Hitung Pembagian Anggota (BERBASIS LAYANAN / SERVICE-BASED)
+  // Tidak ada input pencuci individu. Semua anggota mendapat bagian dari setiap mobil yang dicuci.
   const memberShares = EMPLOYEES_LIST.map(name => {
     const rates = SERVICE_RATES[name];
     const shareFromFull = countFull * rates.Full;
@@ -166,16 +167,19 @@ const App = () => {
     return { name, amount: totalShare };
   });
 
-  // TOTAL PEMBAGIAN ANGGOTA
+  // TOTAL PEMBAGIAN ANGGOTA (VARIABLE DIKUNCI SEBELUM MENGHITUNG OWNER)
   const totalPembagianAnggota = memberShares.reduce((acc, curr) => acc + curr.amount, 0);
 
   // 4. Hitung Pendapatan Owner (PALING TERAKHIR)
   // Rumus Wajib: Pendapatan Owner = Total Omset − Total Pembagian Anggota
   const pendapatanOwnerGross = (totalOmzet - totalPembagianAnggota) || 0;
   
-  // Rumus Akhir (Sisa Bersih): Pendapatan Owner - Pengeluaran Harian
-  // Pengeluaran diperlakukan sebagai angka positif yang mengurangi kas.
-  const pendapatanOwnerNet = (pendapatanOwnerGross - (Number(dailyExpense) || 0)) || 0;
+  // 5. Pengeluaran (Input Manual)
+  // Diperlakukan sebagai angka positif murni untuk mengurangi kas di tangan owner (Sisa Bersih)
+  const expenseValue = Math.abs(Number(dailyExpense) || 0); // Pastikan positif
+  
+  // Sisa Bersih Owner (Net Profit)
+  const pendapatanOwnerNet = (pendapatanOwnerGross - expenseValue) || 0;
 
   const formatDateDisplay = (dateStr) => {
     if (!dateStr) return '-';
@@ -343,13 +347,21 @@ const App = () => {
             <span>(-) Pembagian:</span>
             <span>Rp {totalPembagianAnggota.toLocaleString()}</span>
           </div>
+          
+          <div style={{borderTop: '1px dashed black', margin: '4px 0'}}></div>
+
+          <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 'bold'}}>
+            <span>SISA KOTOR:</span>
+            <span>Rp {pendapatanOwnerGross.toLocaleString()}</span>
+          </div>
+
           <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
             <span>(-) Pengeluaran:</span>
-            <span>Rp {(Number(dailyExpense) || 0).toLocaleString()}</span>
+            <span>Rp {expenseValue.toLocaleString()}</span>
           </div>
           
           <div style={{borderTop: '2px solid black', marginTop: '5px', paddingTop: '5px', display: 'flex', justifyContent: 'space-between'}} className="text-lg bold">
-            <span>BERSIH OWNER:</span>
+            <span>SISA BERSIH:</span>
             <span>Rp {pendapatanOwnerNet.toLocaleString()}</span>
           </div>
 
@@ -393,23 +405,13 @@ const App = () => {
         </div>
       </header>
 
-      {/* --- PRINT HEADER (KHUSUS LAPORAN A4) --- */}
-      <div className="print-header-report w-full mb-6 border-b-2 border-slate-800 pb-4">
-        <h1 className="text-3xl font-black text-slate-900 mb-1">SONIA CAFE CAR WASH</h1>
-        <div className="flex justify-between items-end">
-          <div>
-            <p className="text-sm text-slate-600 font-bold uppercase">Laporan Transaksi</p>
-            <p className="text-sm text-slate-500">Periode: {showAllHistory ? "Semua Riwayat" : new Date(selectedDate).toLocaleDateString('id-ID', { dateStyle: 'full' })}</p>
-          </div>
-          <div className="text-right">
-             <p className="text-xs text-slate-500">Total Masuk: <span className="font-bold text-slate-900">Rp {totalMasuk.toLocaleString()}</span></p>
-             <p className="text-xs text-slate-500">Total Pending: <span className="font-bold text-red-600">Rp {totalPending.toLocaleString()}</span></p>
-          </div>
-        </div>
+      {/* --- PRINT HEADER (KHUSUS LAPORAN A4 - TIDAK DIPAKAI, TAPI DISIMPAN JIKA ADA REQUEST GANTI UKURAN) --- */}
+      <div className="print-header-report w-full mb-6 border-b-2 border-slate-800 pb-4 no-print">
+          {/* Bagian ini disembunyikan karena kita fokus ke Thermal 80mm */}
       </div>
 
       <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8 input-section">
-        {/* --- FORM INPUT --- */}
+        {/* --- FORM INPUT (TANPA INPUT PENCUCI) --- */}
         <div className="lg:col-span-4 space-y-6 animate-enter animate-enter-delay-1 opacity-0 no-print">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl sticky top-8">
             <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
@@ -463,15 +465,16 @@ const App = () => {
                   <p className="text-slate-500 text-xs mt-1">{showAllHistory ? 'Semua Riwayat' : `Tanggal: ${new Date(selectedDate).toLocaleDateString('id-ID', { dateStyle: 'long' })}`}</p>
                </div>
                
-               {/* INPUT PENGELUARAN MANUAL */}
+               {/* INPUT PENGELUARAN MANUAL (Number Only, Positive) */}
                <div className="flex items-center gap-2 bg-white border border-slate-200 p-1 rounded-xl shadow-sm">
                   <div className="pl-3 text-slate-400"><Wallet size={16} /></div>
                   <input 
                     type="number" 
                     value={dailyExpense} 
-                    onChange={(e) => setDailyExpense(Number(e.target.value) || 0)}
+                    onChange={(e) => setDailyExpense(Math.abs(Number(e.target.value)) || 0)} // Force positive
                     placeholder="Pengeluaran (Rp)..." 
                     className="w-32 text-sm py-1.5 focus:outline-none"
+                    min="0"
                   />
                </div>
 
@@ -482,7 +485,7 @@ const App = () => {
                </div>
             </div>
             {!showAllHistory && (
-              <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-3 no-print filter-section">
+              <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-3 filter-section">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pilih Tanggal:</span>
                 <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-lime-500 transition-colors font-mono" />
               </div>
