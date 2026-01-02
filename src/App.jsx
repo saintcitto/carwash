@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Car, Sparkles, Save, Phone, Smartphone, CheckCircle, Clock, Calendar, History, Filter, Printer, Receipt, Hash, Wallet } from 'lucide-react';
+import { Plus, Trash2, Car, Sparkles, Save, Phone, Smartphone, CheckCircle, Clock, Calendar, History, Filter, Printer, Receipt, Hash, Wallet, User } from 'lucide-react';
 
+// KONFIGURASI TARIF GAJI KARYAWAN
 const EMPLOYEES = [
   { name: 'Aci Evi', rateFull: 5000, rateBody: 4000 },
   { name: 'Bang Tomy', rateFull: 5000, rateBody: 4000 },
@@ -37,9 +38,8 @@ const App = () => {
 
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [showAllHistory, setShowAllHistory] = useState(false);
-  const [dailyExpense, setDailyExpense] = useState(0); // State untuk Pengeluaran Manual
+  const [dailyExpense, setDailyExpense] = useState(0); // Pengeluaran Manual
   
-  // Update form data (menghapus washer)
   const [formData, setFormData] = useState({ 
     plat: '', 
     telepon: '', 
@@ -47,6 +47,7 @@ const App = () => {
     warna: '', 
     tipe: 'Full', 
     status: 'pending',
+    washer: EMPLOYEES[0].name // Default washer
   });
   
   const [receiptData, setReceiptData] = useState(null);
@@ -88,11 +89,12 @@ const App = () => {
       harga: harga,
       tipe: formData.tipe,
       status: formData.status,
+      washer: formData.washer, // Simpan data pencuci untuk hitungan gaji
       isNew: true
     };
 
     setLaporan([newItem, ...laporan]);
-    // Reset form
+    // Reset form, keep washer default
     setFormData({ ...formData, plat: '', telepon: '', mobil: '', warna: '', tipe: 'Full', status: 'pending' });
     
     setTimeout(() => setLaporan(prev => prev.map(item => item.id === newItem.id ? { ...item, isNew: false } : item)), 1000);
@@ -132,51 +134,68 @@ const App = () => {
     ? laporan 
     : laporan.filter(item => item.date === selectedDate);
 
-  const totalUnit = filteredLaporan.length;
-  const countFullTotal = filteredLaporan.filter(l => l.tipe === 'Full').length;
-  const countBodyTotal = filteredLaporan.filter(l => l.tipe === 'Body').length;
-
-  const totalMasuk = filteredLaporan.filter(l => l.status === 'paid').reduce((acc, curr) => acc + curr.harga, 0);
-  const totalPending = filteredLaporan.filter(l => l.status === 'pending').reduce((acc, curr) => acc + curr.harga, 0);
+  const totalUnit = filteredLaporan.length || 0;
+  
+  const totalMasuk = filteredLaporan
+    .filter(l => l.status === 'paid')
+    .reduce((acc, curr) => acc + (curr.harga || 0), 0);
+    
+  const totalPending = filteredLaporan
+    .filter(l => l.status === 'pending')
+    .reduce((acc, curr) => acc + (curr.harga || 0), 0);
+    
   const totalOmzet = totalMasuk + totalPending;
 
-  // Cek Hari Minggu (0 = Minggu)
-  // const isWeekend = new Date(selectedDate).getDay() === 0 || new Date(selectedDate).getDay() === 6; // Sabtu & Minggu
-  const isWeekend = new Date(selectedDate).getDay() === 0; // Hanya Minggu sesuai request user "Khusus minggu"
+  // Cek Hari Minggu
+  const isSunday = new Date(selectedDate).getDay() === 0;
 
-  // Hitung Gaji per Karyawan
+  // HITUNG GAJI & BAGI HASIL
+  let employeeStats = [];
   let totalGajiKaryawan = 0;
-  let employeeSalaries = [];
+  let ownerGross = 0;
+  let ownerNet = 0;
 
-  if (isWeekend) {
-      // Logika Weekend: Omzet dibagi 2 (50% Owner, 50% Anggota)
-      // Bagian Anggota dibagi rata ke 5 orang
-      const memberShareTotal = totalOmzet / 2;
-      const salaryPerPerson = memberShareTotal / 5;
-      
-      employeeSalaries = EMPLOYEES.map(emp => ({
-          name: emp.name,
-          salary: salaryPerPerson
-      }));
-      totalGajiKaryawan = memberShareTotal;
+  if (isSunday) {
+    // === LOGIKA MINGGU (Sharing Fee) ===
+    // Omzet dibagi 2: 50% Owner, 50% Anggota
+    const poolAnggota = totalOmzet / 2;
+    const gajiPerOrang = poolAnggota / 5; // Dibagi 5 orang rata
+    
+    // Generate data untuk display
+    employeeStats = EMPLOYEES.map(emp => ({
+      name: emp.name,
+      totalGaji: gajiPerOrang
+    }));
+    
+    totalGajiKaryawan = poolAnggota;
+    ownerGross = totalOmzet / 2;
+    // Owner menerima bagian bersih setelah dikurangi pengeluaran dari bagiannya
+    // "owner menerima bagiannya secara bersih" -> Bagian Owner - Pengeluaran
+    ownerNet = ownerGross - (dailyExpense || 0);
+
   } else {
-      // Logika Hari Biasa: Berdasarkan Tarif per Mobil (Semua mobil dihitung ke semua karyawan karena sistem tim/bagi rata tugas biasanya, atau asumsi user "berdasarkan jumlah mobil" apply ke tarif masing-masing)
-      // Request user: "Hitung total gaji masing-masing berdasarkan jumlah mobil."
-      // Asumsi: Setiap mobil dikerjakan bersama, jadi setiap mobil generate tarif untuk setiap orang.
+    // === LOGIKA HARIAN (Tarif per Mobil) ===
+    employeeStats = EMPLOYEES.map(emp => {
+      // Cari mobil yang dikerjakan karyawan ini
+      const jobs = filteredLaporan.filter(l => l.washer === emp.name);
+      const countFull = jobs.filter(l => l.tipe === 'Full').length;
+      const countBody = jobs.filter(l => l.tipe === 'Body').length;
       
-      employeeSalaries = EMPLOYEES.map(emp => {
-          const salary = (countFullTotal * emp.rateFull) + (countBodyTotal * emp.rateBody);
-          return { name: emp.name, salary };
-      });
-      totalGajiKaryawan = employeeSalaries.reduce((acc, curr) => acc.salary + curr.salary, 0);
+      const gaji = (countFull * emp.rateFull) + (countBody * emp.rateBody);
+      
+      return {
+        name: emp.name,
+        countFull,
+        countBody,
+        totalGaji: gaji
+      };
+    });
+
+    totalGajiKaryawan = employeeStats.reduce((acc, curr) => acc + curr.totalGaji, 0);
+    // Hari biasa: Sisa Omzet - Pengeluaran - Gaji
+    ownerGross = totalOmzet; // Base calculation
+    ownerNet = totalOmzet - totalGajiKaryawan - (dailyExpense || 0);
   }
-  
-  // Sisa Bersih Owner
-  // Weekend: Owner dapat 50% bersih (user request: "owner menerima bagiannya secara bersih") -> tapi ada pengeluaran manual.
-  // Biasanya pengeluaran diambil dari total omzet dulu atau dari bagian owner?
-  // Mengikuti pola umum: Net Profit = (Bagian Owner) - Pengeluaran
-  const ownerGrossShare = isWeekend ? (totalOmzet / 2) : (totalOmzet - totalGajiKaryawan);
-  const netProfit = ownerGrossShare - dailyExpense;
 
   const formatDateDisplay = (dateStr) => {
     if (!dateStr) return '-';
@@ -186,136 +205,132 @@ const App = () => {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 md:p-8 flex flex-col items-center overflow-x-hidden">
       
-      {/* CSS STYLES */}
+      {/* CSS STYLES - KHUSUS THERMAL 80MM */}
       <style>{`
         @keyframes slideInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 50% { transform: scale(1.05); } 100% { transform: scale(1); opacity: 1; } }
-        @keyframes highlightRow { 0% { background-color: #d9f99d; transform: scale(1.02); } 100% { background-color: transparent; transform: scale(1); } }
         .animate-enter { animation: slideInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .animate-pop { animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-        .new-row { animation: highlightRow 1s ease-out; }
         
         @media print {
-          /* SETUP KERTAS THERMAL 80MM */
-          @page { 
-            size: 80mm auto; 
-            margin: 0mm; 
-          }
-          
-          body { 
-            background: white !important; 
-            -webkit-print-color-adjust: exact; 
-            print-color-adjust: exact; 
-            color: #000 !important; 
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 80mm;
-            min-width: 80mm;
-          }
-
-          * { color: #000 !important; border-color: #000 !important; visibility: visible !important; }
+          @page { size: 80mm auto; margin: 0mm; }
+          body { background: white !important; margin: 0 !important; padding: 0 !important; width: 80mm; min-width: 80mm; color: #000 !important; }
           .no-print, header, .input-section, .filter-section, button { display: none !important; }
+          * { visibility: visible !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           
-          /* LAYOUT STRUK (Digunakan untuk Transaksi & Laporan Harian) */
+          /* CONTAINER STRUK */
           .receipt-container { 
             display: block !important; 
             width: 100%; 
-            max-width: 72mm !important; /* Margin aman */
+            max-width: 72mm !important; /* Margin aman printer 80mm */
             margin: 0 auto !important;
-            padding: 5px 0 !important;
+            padding: 5px 0 20px 0 !important;
             font-family: 'Courier New', monospace; 
-            color: #000 !important;
             font-weight: 600;
-            line-height: 1.2;
-            font-size: 12px;
+            line-height: 1.3;
+            font-size: 11px;
+            color: #000 !important;
           }
-          .dashed-line { border-top: 1px dashed black; margin: 6px 0; width: 100%; height: 1px; }
-          .receipt-container p, .receipt-container div { margin: 0; padding: 0; }
           
-          /* Sembunyikan elemen A4 jika ada sisa */
-          .report-container, .print-header-report, .print-summary { display: none !important; }
+          /* TABEL DLM STRUK */
+          .receipt-table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+          .receipt-table th { text-align: left; border-bottom: 1px dashed black; padding: 2px 0; }
+          .receipt-table td { text-align: left; padding: 2px 0; vertical-align: top; }
+          .text-right { text-align: right !important; }
+          .text-center { text-align: center !important; }
+          
+          .dashed-line { border-top: 1px dashed black; margin: 5px 0; width: 100%; height: 1px; }
+          .bold { font-weight: 800; }
+          .text-lg { font-size: 14px; }
+          .text-xl { font-size: 16px; }
         }
-        
         .receipt-container { display: none; }
       `}</style>
 
-      {/* --- STRUK 1: TRANSAKSI PER MOBIL (80mm) --- */}
+      {/* --- 1. STRUK TRANSAKSI (PER MOBIL) --- */}
       {receiptData && !printDailySummary && (
         <div className="receipt-container">
           <div className="text-center mb-2">
-            <p className="text-[16px] font-black uppercase mb-1">SONIA CAFE</p>
-            <p className="text-[10px]">Car Wash & Auto Detailing</p>
-            <p className="text-[9px] mt-1">Jl. Medan - Tebing Tinggi No. 38</p>
-            <p className="text-[9px]">Kota Galuh, Perbaungan</p>
-            <p className="text-[10px] font-bold mt-1">WA: 0853-6296-2929</p>
+            <div className="text-xl bold">SONIA CAFE</div>
+            <div>Car Wash & Auto Detailing</div>
+            <div style={{fontSize: '9px'}}>Jl. Medan - Tebing Tinggi No. 38</div>
+            <div style={{fontSize: '9px'}}>Kota Galuh, Perbaungan</div>
+            <div style={{fontSize: '10px'}} className="bold mt-1">WA: 0853-6296-2929</div>
           </div>
+          
           <div className="dashed-line"></div>
-          <div className="flex justify-between text-[10px]">
+          
+          <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
             <span>{new Date().toLocaleDateString('id-ID')}</span>
             <span>{new Date().toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}</span>
           </div>
+          
           <div className="dashed-line"></div>
+
           <div className="text-center py-1">
-            <p className="text-[20px] font-black tracking-tight mb-1">{receiptData.plat}</p>
-            <p className="text-[11px] uppercase font-bold">{receiptData.mobil} / {receiptData.warna}</p>
+            <div className="text-xl bold">{receiptData.plat}</div>
+            <div className="bold">{receiptData.mobil}</div>
+            <div style={{fontSize: '10px'}}>{receiptData.warna}</div>
           </div>
+
           <div className="dashed-line"></div>
-          <div className="flex justify-between text-[11px] font-bold mb-1"><span>LAYANAN</span><span>HARGA</span></div>
-          <div className="flex justify-between text-[11px] uppercase">
+
+          <div style={{display: 'flex', justifyContent: 'space-between'}} className="bold">
+            <span>LAYANAN</span>
+            <span>HARGA</span>
+          </div>
+          <div style={{display: 'flex', justifyContent: 'space-between'}}>
             <span>CUCI {receiptData.tipe}</span>
             <span>{receiptData.harga.toLocaleString()}</span>
           </div>
+
           <div className="dashed-line"></div>
-          <div className="flex justify-between text-[14px] font-black mt-1"><span>TOTAL</span><span>Rp {receiptData.harga.toLocaleString()}</span></div>
-          <div className="mt-3 text-center">
-            <span className="border border-black px-3 py-1 text-[12px] font-bold uppercase rounded-sm inline-block">
-              {receiptData.status === 'paid' ? 'LUNAS / PAID' : 'BELUM BAYAR'}
+
+          <div style={{display: 'flex', justifyContent: 'space-between'}} className="text-lg bold">
+            <span>TOTAL</span>
+            <span>Rp {receiptData.harga.toLocaleString()}</span>
+          </div>
+          
+          <div className="mt-2 text-center">
+            <span style={{border: '1px solid black', padding: '2px 8px'}} className="bold">
+              {receiptData.status === 'paid' ? 'LUNAS' : 'BELUM BAYAR'}
             </span>
           </div>
-          <div className="mt-4 text-center text-[10px]"><p>Terima Kasih!</p></div>
-          <div className="h-6"></div>
-          <div className="text-center text-[8px]">.</div>
+
+          <div className="mt-4 text-center" style={{fontSize: '10px'}}>
+            <p>Terima Kasih!</p>
+          </div>
         </div>
       )}
 
-      {/* --- STRUK 2: LAPORAN HARIAN (80mm) --- */}
+      {/* --- 2. STRUK LAPORAN HARIAN (80MM - GAJI & KEUANGAN) --- */}
       {printDailySummary && (
         <div className="receipt-container">
           <div className="text-center mb-2">
-            <p className="text-[16px] font-black uppercase mb-1">LAPORAN HARIAN</p>
-            <p className="text-[12px] font-bold">SONIA CAFE</p>
-            <p className="text-[10px] mt-1">{showAllHistory ? "SEMUA RIWAYAT" : formatDateDisplay(selectedDate)}</p>
+            <div className="text-xl bold">LAPORAN HARIAN</div>
+            <div className="bold">SONIA CAFE</div>
+            <div style={{fontSize: '10px'}}>{showAllHistory ? "SEMUA RIWAYAT" : formatDateDisplay(selectedDate)}</div>
           </div>
 
           <div className="dashed-line"></div>
 
-          <div className="flex justify-between text-[12px] font-bold py-1">
+          <div style={{display: 'flex', justifyContent: 'space-between'}} className="bold">
             <span>TOTAL UNIT:</span>
             <span>{totalUnit} Mobil</span>
           </div>
-          {/* Detail Jumlah Tipe Mobil (Opsional, bagus untuk cek silang gaji) */}
-          {!isWeekend && (
-             <div className="flex justify-between text-[10px] pb-1">
-                <span>(Full: {countFullTotal} | Body: {countBodyTotal})</span>
-             </div>
-          )}
 
           <div className="dashed-line"></div>
 
-          <div className="text-[12px] font-bold mb-2">RINGKASAN KEUANGAN:</div>
-          
-          <div className="flex justify-between text-[11px] mb-1">
+          <div className="bold" style={{marginBottom: '4px'}}>RINGKASAN OMSET:</div>
+          <div style={{display: 'flex', justifyContent: 'space-between'}}>
             <span>Total Omzet:</span>
             <span>Rp {totalOmzet.toLocaleString()}</span>
           </div>
-          <div className="flex justify-between text-[11px] mb-1">
+          <div style={{display: 'flex', justifyContent: 'space-between'}}>
             <span>Belum Bayar:</span>
             <span>Rp {totalPending.toLocaleString()}</span>
           </div>
-          
-          <div className="dashed-line"></div>
-          
-          <div className="flex justify-between text-[13px] font-black mt-1">
+          <div style={{display: 'flex', justifyContent: 'space-between'}} className="bold mt-1">
             <span>UANG MASUK:</span>
             <span>Rp {totalMasuk.toLocaleString()}</span>
           </div>
@@ -323,54 +338,75 @@ const App = () => {
           <div className="dashed-line"></div>
 
           {/* BAGIAN GAJI KARYAWAN */}
-          <div className="text-[11px] font-bold mb-1 mt-2 text-center uppercase border-b border-black pb-1">
-            {isWeekend ? 'BAGI HASIL (MINGGU)' : 'RINCIAN GAJI HARIAN'}
+          <div className="text-center bold" style={{marginBottom: '4px'}}>
+            {isSunday ? '-- BAGI HASIL (MINGGU) --' : '-- RINCIAN GAJI --'}
           </div>
           
-          {employeeSalaries.map((emp, idx) => (
-            <div key={idx} className="flex justify-between text-[10px] mb-1">
-              <span>{emp.name}</span>
-              <span>Rp {emp.salary.toLocaleString()}</span>
-            </div>
-          ))}
+          {isSunday && (
+             <div style={{fontSize: '10px', textAlign: 'center', marginBottom: '5px'}}>
+                Omzet / 2 / 5 Anggota
+             </div>
+          )}
+
+          <table className="receipt-table">
+            <thead>
+              <tr>
+                <th width="40%">Nama</th>
+                {!isSunday && <th width="20%" className="text-center">Jml</th>}
+                <th width="40%" className="text-right">Gaji</th>
+              </tr>
+            </thead>
+            <tbody>
+              {employeeStats.map((emp, idx) => (
+                <tr key={idx}>
+                  <td>{emp.name}</td>
+                  {!isSunday && <td className="text-center">{emp.countFull + emp.countBody}</td>}
+                  <td className="text-right">{emp.totalGaji.toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="dashed-line"></div>
           
-          <div className="flex justify-between text-[11px] font-bold border-t border-dashed border-black pt-1 mt-1">
+          <div style={{display: 'flex', justifyContent: 'space-between'}} className="bold">
             <span>TOTAL GAJI:</span>
             <span>Rp {totalGajiKaryawan.toLocaleString()}</span>
           </div>
 
           <div className="dashed-line"></div>
 
-          {/* BAGIAN OWNER & PENGELUARAN */}
-          <div className="text-[11px] font-bold mb-1 mt-2 text-center uppercase border-b border-black pb-1">
-            PEMBAGIAN OWNER
+          {/* BAGIAN OWNER */}
+          <div className="text-center bold" style={{marginTop: '5px', marginBottom: '4px'}}>
+            -- PENDAPATAN BERSIH --
+          </div>
+          
+          {isSunday && (
+             <div style={{display: 'flex', justifyContent: 'space-between'}}>
+               <span>Bagian Owner (50%):</span>
+               <span>Rp {ownerGross.toLocaleString()}</span>
+             </div>
+          )}
+          
+          <div style={{display: 'flex', justifyContent: 'space-between'}}>
+            <span>Pengeluaran:</span>
+            <span>Rp {(dailyExpense || 0).toLocaleString()}</span>
+          </div>
+          
+          <div className="dashed-line"></div>
+
+          <div style={{display: 'flex', justifyContent: 'space-between'}} className="text-lg bold">
+            <span>SISA (OWNER):</span>
+            <span>Rp {ownerNet.toLocaleString()}</span>
           </div>
 
-          <div className="flex justify-between text-[10px] mb-1">
-            <span>Gross Owner:</span>
-            <span>Rp {ownerGrossShare.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between text-[10px] mb-1">
-            <span>(-) Pengeluaran:</span>
-            <span>Rp {dailyExpense.toLocaleString()}</span>
-          </div>
-          
-          <div className="flex justify-between text-[13px] font-black mt-2 border-2 border-black p-1">
-            <span>BERSIH OWNER:</span>
-            <span>Rp {netProfit.toLocaleString()}</span>
-          </div>
-          
-          <div className="mt-4 text-center text-[10px]">
+          <div className="mt-4 text-center" style={{fontSize: '9px'}}>
             <p>Dicetak pada: {new Date().toLocaleString('id-ID')}</p>
-            <p className="mt-1">-- Akhir Laporan --</p>
           </div>
-          
-          <div className="h-6"></div>
-          <div className="text-center text-[8px]">.</div>
         </div>
       )}
 
-      {/* --- DASHBOARD WEB --- */}
+      {/* --- UI DASHBOARD WEB (INPUT & TABEL) --- */}
       <header className="w-full max-w-7xl mb-10 border-b border-slate-200 pb-8 animate-enter opacity-0 no-print">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div>
@@ -389,7 +425,7 @@ const App = () => {
             </div>
             <div className="flex-1 min-w-[160px] bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 animate-pop opacity-0" style={{animationDelay: '0.2s'}}>
               <div className="bg-lime-100 p-3 rounded-xl text-lime-600"><CheckCircle size={24} /></div>
-              <div><p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total Masuk</p><p className="text-2xl font-mono font-bold text-slate-800">{totalMasuk.toLocaleString()}k</p></div>
+              <div><p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total Masuk</p><p className="text-2xl font-mono font-bold text-slate-800">{totalMasuk.toLocaleString()}K</p></div>
             </div>
             <div className="flex-1 min-w-[140px] flex items-center justify-center">
                <button onClick={handlePrintDailyReport} className="bg-slate-900 hover:bg-slate-800 text-white p-4 rounded-2xl shadow-lg flex flex-col items-center gap-2 transition-all active:scale-95 w-full h-full justify-center" title="Print Laporan Harian">
@@ -421,6 +457,25 @@ const App = () => {
                   <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase tracking-wider">Nomor Plat</label>
                   <input type="text" name="plat" value={formData.plat} onChange={handleChange} placeholder="B 1234 XYZ" className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 focus:outline-none focus:border-lime-500 font-bold uppercase font-mono" autoComplete="off" />
               </div>
+              
+              {/* INPUT PENCUCI (Untuk perhitungan gaji, tapi tidak muncul di tabel header) */}
+              <div className="group">
+                <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase tracking-wider">Pencuci (Untuk Gaji)</label>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+                  <select 
+                    name="washer" 
+                    value={formData.washer} 
+                    onChange={handleChange}
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:border-lime-500 appearance-none font-medium cursor-pointer"
+                  >
+                    {EMPLOYEES.map(emp => (
+                      <option key={emp.name} value={emp.name}>{emp.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="group">
                 <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase tracking-wider">No. WhatsApp</label>
                 <div className="relative">
@@ -439,7 +494,7 @@ const App = () => {
                 </div>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase tracking-wider">Layanan & Status</label>
+                <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase tracking-wider">Layanan</label>
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <button type="button" onClick={() => setFormData({...formData, tipe: 'Full'})} className={`p-3 rounded-lg border text-sm font-bold flex flex-col items-center gap-1 ${formData.tipe === 'Full' ? 'bg-lime-50 border-lime-500 text-lime-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}><Sparkles size={16} /> Full</button>
                   <button type="button" onClick={() => setFormData({...formData, tipe: 'Body'})} className={`p-3 rounded-lg border text-sm font-bold flex flex-col items-center gap-1 ${formData.tipe === 'Body' ? 'bg-cyan-50 border-cyan-500 text-cyan-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}><Car size={16} /> Body</button>
@@ -454,7 +509,7 @@ const App = () => {
           </div>
         </div>
 
-        {/* TABEL LAPORAN */}
+        {/* TABEL DATA (TANPA KOLOM PENCUCI DI HEADER) */}
         <div className="lg:col-span-8 animate-enter animate-enter-delay-2 opacity-0 report-container">
           <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm min-h-[600px] flex flex-col">
             <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50 filter-section">
@@ -469,7 +524,7 @@ const App = () => {
                   <input 
                     type="number" 
                     value={dailyExpense} 
-                    onChange={(e) => setDailyExpense(Number(e.target.value))}
+                    onChange={(e) => setDailyExpense(Number(e.target.value) || 0)}
                     placeholder="Pengeluaran (Rp)..." 
                     className="w-32 text-sm py-1.5 focus:outline-none"
                   />
@@ -489,7 +544,7 @@ const App = () => {
             )}
 
             <div className="overflow-x-auto flex-1">
-              <table className="w-full text-left border-collapse print-table">
+              <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 text-slate-400 text-[10px] md:text-xs uppercase tracking-widest border-b border-slate-100">
                     <th className="p-4 pl-6 w-12 text-center">No</th>
