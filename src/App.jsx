@@ -65,7 +65,7 @@ const App = () => {
   const [receiptData, setReceiptData] = useState(null);
   const [printDailySummary, setPrintDailySummary] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
-  const [expenseForm, setExpenseForm] = useState({ name: '', amount: '' });
+  const [expenseForm, setExpenseForm] = useState({ name: '', amount: '', note: '' });
 
   const HARGA_FULL = 50000;
   const HARGA_BODY = 35000;
@@ -165,11 +165,12 @@ const App = () => {
         id: Date.now(),
         date: getTodayString(),
         name: expenseForm.name,
-        amount: Number(expenseForm.amount)
+        amount: Number(expenseForm.amount),
+        note: expenseForm.note
     };
     
     setExpenses([...expenses, newExpense]);
-    setExpenseForm({ name: '', amount: '' });
+    setExpenseForm({ name: '', amount: '', note: '' });
     setShowExpenseModal(false);
   };
 
@@ -306,6 +307,17 @@ const App = () => {
                             value={expenseForm.amount}
                             onChange={handleExpenseChange}
                             placeholder="0"
+                            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2 focus:outline-none focus:border-slate-400"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Catatan Pengeluaran</label>
+                        <input 
+                            type="text" 
+                            name="note"
+                            value={expenseForm.note}
+                            onChange={handleExpenseChange}
+                            placeholder="Keterangan tambahan (opsional)"
                             className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2 focus:outline-none focus:border-slate-400"
                         />
                     </div>
