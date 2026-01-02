@@ -257,7 +257,6 @@ const App = () => {
         }
         .receipt-container { display: none; }
 
-        /* Modal Styles */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -284,7 +283,7 @@ const App = () => {
         <div className="modal-overlay no-print">
             <div className="modal-content animate-pop">
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-bold text-slate-800">Catat Pengeluaran</h3>
+                    <h3 className="text-lg font-bold text-slate-800">Pengeluaran</h3>
                     <button onClick={() => setShowExpenseModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
                 </div>
                 <div className="space-y-4">
@@ -427,6 +426,26 @@ const App = () => {
             <span>Rp {totalPembagianAnggota.toLocaleString()}</span>
           </div>
 
+          {filteredExpenses.length > 0 && (
+            <>
+              <div className="dashed-line"></div>
+              <div className="text-center bold" style={{marginBottom: '4px'}}>-- PENGELUARAN --</div>
+              {filteredExpenses.map((exp, idx) => (
+                <div key={idx} style={{marginBottom: '2px'}}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
+                    <span>{exp.name}</span>
+                    <span>Rp {exp.amount.toLocaleString()}</span>
+                  </div>
+                  {exp.note && <div style={{fontSize: '9px', fontStyle: 'italic', color: '#333'}}>- {exp.note}</div>}
+                </div>
+              ))}
+              <div style={{borderTop: '1px solid black', marginTop: '2px', paddingTop: '2px', display: 'flex', justifyContent: 'space-between', fontSize: '10px'}} className="bold">
+                <span>TOTAL KELUAR:</span>
+                <span>Rp {totalExpense.toLocaleString()}</span>
+              </div>
+            </>
+          )}
+
           <div className="dashed-line"></div>
 
           <div className="text-center bold" style={{marginTop: '5px', marginBottom: '4px'}}>
@@ -441,14 +460,6 @@ const App = () => {
             <span>(-) Pembagian:</span>
             <span>Rp {totalPembagianAnggota.toLocaleString()}</span>
           </div>
-          
-          <div style={{borderTop: '1px dashed black', margin: '4px 0'}}></div>
-
-          <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 'bold'}}>
-            <span>SISA KOTOR:</span>
-            <span>Rp {pendapatanOwnerGross.toLocaleString()}</span>
-          </div>
-
           <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
             <span>(-) Pengeluaran:</span>
             <span>Rp {totalExpense.toLocaleString()}</span>
