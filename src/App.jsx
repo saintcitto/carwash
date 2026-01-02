@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Car, Sparkles, Save, Phone, Smartphone, CheckCircle, Clock, Calendar, History, Filter, Printer, Receipt, Hash, Wallet, DollarSign } from 'lucide-react';
+import { Plus, Trash2, Car, Sparkles, Save, Phone, Smartphone, CheckCircle, Clock, Calendar, History, Filter, Printer, Receipt, Hash, Wallet } from 'lucide-react';
+
+const EMPLOYEES = [
+  { name: 'Aci Evi', rateFull: 5000, rateBody: 4000 },
+  { name: 'Bang Tomy', rateFull: 5000, rateBody: 4000 },
+  { name: 'Usuf', rateFull: 3750, rateBody: 2500 },
+  { name: 'Rio', rateFull: 3500, rateBody: 2500 },
+  { name: 'Paijo', rateFull: 3500, rateBody: 2500 },
+];
 
 const App = () => {
   // --- HELPERS ---
@@ -29,15 +37,16 @@ const App = () => {
 
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [showAllHistory, setShowAllHistory] = useState(false);
-  const [dailyExpense, setDailyExpense] = useState(0); // Input Pengeluaran Manual
+  const [dailyExpense, setDailyExpense] = useState(0); // State untuk Pengeluaran Manual
   
+  // Update form data (menghapus washer)
   const [formData, setFormData] = useState({ 
     plat: '', 
     telepon: '', 
     mobil: '', 
     warna: '', 
     tipe: 'Full', 
-    status: 'pending' 
+    status: 'pending',
   });
   
   const [receiptData, setReceiptData] = useState(null);
@@ -83,6 +92,7 @@ const App = () => {
     };
 
     setLaporan([newItem, ...laporan]);
+    // Reset form
     setFormData({ ...formData, plat: '', telepon: '', mobil: '', warna: '', tipe: 'Full', status: 'pending' });
     
     setTimeout(() => setLaporan(prev => prev.map(item => item.id === newItem.id ? { ...item, isNew: false } : item)), 1000);
@@ -98,7 +108,7 @@ const App = () => {
     setLaporan(laporan.map(item => item.id === id ? { ...item, status: item.status === 'paid' ? 'pending' : 'paid' } : item));
   };
 
-  // --- PRINT LOGIC ---
+  // --- LOGIC PRINTING ---
   const handlePrintReceipt = (item) => {
     setReceiptData(item);
     setPrintDailySummary(false);
@@ -123,18 +133,50 @@ const App = () => {
     : laporan.filter(item => item.date === selectedDate);
 
   const totalUnit = filteredLaporan.length;
+  const countFullTotal = filteredLaporan.filter(l => l.tipe === 'Full').length;
+  const countBodyTotal = filteredLaporan.filter(l => l.tipe === 'Body').length;
+
   const totalMasuk = filteredLaporan.filter(l => l.status === 'paid').reduce((acc, curr) => acc + curr.harga, 0);
   const totalPending = filteredLaporan.filter(l => l.status === 'pending').reduce((acc, curr) => acc + curr.harga, 0);
   const totalOmzet = totalMasuk + totalPending;
 
-  // LOGIKA BAGI HASIL (MINGGU)
-  const isSunday = new Date(selectedDate).getDay() === 0;
+  // Cek Hari Minggu (0 = Minggu)
+  // const isWeekend = new Date(selectedDate).getDay() === 0 || new Date(selectedDate).getDay() === 6; // Sabtu & Minggu
+  const isWeekend = new Date(selectedDate).getDay() === 0; // Hanya Minggu sesuai request user "Khusus minggu"
+
+  // Hitung Gaji per Karyawan
+  let totalGajiKaryawan = 0;
+  let employeeSalaries = [];
+
+  if (isWeekend) {
+      // Logika Weekend: Omzet dibagi 2 (50% Owner, 50% Anggota)
+      // Bagian Anggota dibagi rata ke 5 orang
+      const memberShareTotal = totalOmzet / 2;
+      const salaryPerPerson = memberShareTotal / 5;
+      
+      employeeSalaries = EMPLOYEES.map(emp => ({
+          name: emp.name,
+          salary: salaryPerPerson
+      }));
+      totalGajiKaryawan = memberShareTotal;
+  } else {
+      // Logika Hari Biasa: Berdasarkan Tarif per Mobil (Semua mobil dihitung ke semua karyawan karena sistem tim/bagi rata tugas biasanya, atau asumsi user "berdasarkan jumlah mobil" apply ke tarif masing-masing)
+      // Request user: "Hitung total gaji masing-masing berdasarkan jumlah mobil."
+      // Asumsi: Setiap mobil dikerjakan bersama, jadi setiap mobil generate tarif untuk setiap orang.
+      
+      employeeSalaries = EMPLOYEES.map(emp => {
+          const salary = (countFullTotal * emp.rateFull) + (countBodyTotal * emp.rateBody);
+          return { name: emp.name, salary };
+      });
+      totalGajiKaryawan = employeeSalaries.reduce((acc, curr) => acc.salary + curr.salary, 0);
+  }
   
-  // Perhitungan Khusus Minggu
-  const sharingPool = totalOmzet / 2; // 50% untuk Karyawan
-  const salaryPerPerson = sharingPool / 5; // Dibagi 5 orang
-  const ownerGross = totalOmzet / 2; // 50% untuk Owner
-  const ownerNet = ownerGross - dailyExpense; // Sisa Bersih Owner
+  // Sisa Bersih Owner
+  // Weekend: Owner dapat 50% bersih (user request: "owner menerima bagiannya secara bersih") -> tapi ada pengeluaran manual.
+  // Biasanya pengeluaran diambil dari total omzet dulu atau dari bagian owner?
+  // Mengikuti pola umum: Net Profit = (Bagian Owner) - Pengeluaran
+  const ownerGrossShare = isWeekend ? (totalOmzet / 2) : (totalOmzet - totalGajiKaryawan);
+  const netProfit = ownerGrossShare - dailyExpense;
 
   const formatDateDisplay = (dateStr) => {
     if (!dateStr) return '-';
@@ -144,6 +186,7 @@ const App = () => {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 md:p-8 flex flex-col items-center overflow-x-hidden">
       
+      {/* CSS STYLES */}
       <style>{`
         @keyframes slideInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 50% { transform: scale(1.05); } 100% { transform: scale(1); opacity: 1; } }
@@ -171,7 +214,7 @@ const App = () => {
           }
 
           * { color: #000 !important; border-color: #000 !important; visibility: visible !important; }
-          .no-print, header, .input-section, .filter-section, button, .report-container { display: none !important; }
+          .no-print, header, .input-section, .filter-section, button { display: none !important; }
           
           /* LAYOUT STRUK (Digunakan untuk Transaksi & Laporan Harian) */
           .receipt-container { 
@@ -188,12 +231,15 @@ const App = () => {
           }
           .dashed-line { border-top: 1px dashed black; margin: 6px 0; width: 100%; height: 1px; }
           .receipt-container p, .receipt-container div { margin: 0; padding: 0; }
+          
+          /* Sembunyikan elemen A4 jika ada sisa */
+          .report-container, .print-header-report, .print-summary { display: none !important; }
         }
         
         .receipt-container { display: none; }
       `}</style>
 
-      {/* --- STRUK 1: TRANSAKSI PER MOBIL --- */}
+      {/* --- STRUK 1: TRANSAKSI PER MOBIL (80mm) --- */}
       {receiptData && !printDailySummary && (
         <div className="receipt-container">
           <div className="text-center mb-2">
@@ -247,85 +293,72 @@ const App = () => {
             <span>TOTAL UNIT:</span>
             <span>{totalUnit} Mobil</span>
           </div>
+          {/* Detail Jumlah Tipe Mobil (Opsional, bagus untuk cek silang gaji) */}
+          {!isWeekend && (
+             <div className="flex justify-between text-[10px] pb-1">
+                <span>(Full: {countFullTotal} | Body: {countBodyTotal})</span>
+             </div>
+          )}
 
           <div className="dashed-line"></div>
 
-          {/* Rincian Keuangan */}
-          <div className="text-[12px] font-bold mb-1">KEUANGAN:</div>
+          <div className="text-[12px] font-bold mb-2">RINGKASAN KEUANGAN:</div>
+          
           <div className="flex justify-between text-[11px] mb-1">
             <span>Total Omzet:</span>
             <span>Rp {totalOmzet.toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-[11px] mb-1">
+            <span>Belum Bayar:</span>
+            <span>Rp {totalPending.toLocaleString()}</span>
+          </div>
+          
+          <div className="dashed-line"></div>
+          
+          <div className="flex justify-between text-[13px] font-black mt-1">
+            <span>UANG MASUK:</span>
+            <span>Rp {totalMasuk.toLocaleString()}</span>
+          </div>
+
+          <div className="dashed-line"></div>
+
+          {/* BAGIAN GAJI KARYAWAN */}
+          <div className="text-[11px] font-bold mb-1 mt-2 text-center uppercase border-b border-black pb-1">
+            {isWeekend ? 'BAGI HASIL (MINGGU)' : 'RINCIAN GAJI HARIAN'}
+          </div>
+          
+          {employeeSalaries.map((emp, idx) => (
+            <div key={idx} className="flex justify-between text-[10px] mb-1">
+              <span>{emp.name}</span>
+              <span>Rp {emp.salary.toLocaleString()}</span>
+            </div>
+          ))}
+          
+          <div className="flex justify-between text-[11px] font-bold border-t border-dashed border-black pt-1 mt-1">
+            <span>TOTAL GAJI:</span>
+            <span>Rp {totalGajiKaryawan.toLocaleString()}</span>
+          </div>
+
+          <div className="dashed-line"></div>
+
+          {/* BAGIAN OWNER & PENGELUARAN */}
+          <div className="text-[11px] font-bold mb-1 mt-2 text-center uppercase border-b border-black pb-1">
+            PEMBAGIAN OWNER
+          </div>
+
+          <div className="flex justify-between text-[10px] mb-1">
+            <span>Gross Owner:</span>
+            <span>Rp {ownerGrossShare.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-[10px] mb-1">
             <span>(-) Pengeluaran:</span>
             <span>Rp {dailyExpense.toLocaleString()}</span>
           </div>
           
-          <div className="dashed-line"></div>
-
-          {/* Logika Gaji Khusus Minggu */}
-          {isSunday ? (
-            <>
-              <div className="text-center text-[11px] font-bold mb-2 uppercase border border-black p-1">
-                MINGGU (BAGI HASIL 50:50)
-              </div>
-              
-              <div className="text-[11px] font-bold mb-1">BAGIAN KARYAWAN (50%):</div>
-              <div className="flex justify-between text-[11px] mb-1">
-                <span>Total Pool:</span>
-                <span>Rp {sharingPool.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-[11px] mb-1 pl-2">
-                <span>- Aci Evi:</span>
-                <span>{salaryPerPerson.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-[11px] mb-1 pl-2">
-                <span>- Bang Tomy:</span>
-                <span>{salaryPerPerson.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-[11px] mb-1 pl-2">
-                <span>- Usuf:</span>
-                <span>{salaryPerPerson.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-[11px] mb-1 pl-2">
-                <span>- Rio:</span>
-                <span>{salaryPerPerson.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-[11px] mb-1 pl-2">
-                <span>- Paijo:</span>
-                <span>{salaryPerPerson.toLocaleString()}</span>
-              </div>
-
-              <div className="dashed-line"></div>
-
-              <div className="text-[11px] font-bold mb-1">BAGIAN OWNER (50%):</div>
-              <div className="flex justify-between text-[11px] mb-1">
-                <span>Gross:</span>
-                <span>Rp {ownerGross.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-[11px] mb-1">
-                <span>(-) Exp:</span>
-                <span>Rp {dailyExpense.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-[13px] font-black mt-1 border-t border-dashed border-black pt-1">
-                <span>BERSIH:</span>
-                <span>Rp {ownerNet.toLocaleString()}</span>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Logika Hari Biasa (Omzet Bersih) */}
-              <div className="flex justify-between text-[13px] font-black mt-1">
-                <span>SISA BERSIH:</span>
-                <span>Rp {(totalOmzet - dailyExpense).toLocaleString()}</span>
-              </div>
-              <div className="text-center text-[9px] italic mt-1">
-                (Gaji harian dihitung manual sesuai tarif)
-              </div>
-            </>
-          )}
-
-          <div className="dashed-line"></div>
+          <div className="flex justify-between text-[13px] font-black mt-2 border-2 border-black p-1">
+            <span>BERSIH OWNER:</span>
+            <span>Rp {netProfit.toLocaleString()}</span>
+          </div>
           
           <div className="mt-4 text-center text-[10px]">
             <p>Dicetak pada: {new Date().toLocaleString('id-ID')}</p>
@@ -361,7 +394,7 @@ const App = () => {
             <div className="flex-1 min-w-[140px] flex items-center justify-center">
                <button onClick={handlePrintDailyReport} className="bg-slate-900 hover:bg-slate-800 text-white p-4 rounded-2xl shadow-lg flex flex-col items-center gap-2 transition-all active:scale-95 w-full h-full justify-center" title="Print Laporan Harian">
                  <Printer size={24} />
-                 <span className="text-xs font-bold uppercase tracking-widest">Laporan Harian</span>
+                 <span className="text-xs font-bold uppercase tracking-widest">Print Laporan</span>
                </button>
             </div>
           </div>
@@ -477,7 +510,6 @@ const App = () => {
                         <div className="text-slate-500 text-xs flex flex-wrap items-center gap-2 mt-1">
                           <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium border border-slate-200">{item.mobil}</span>
                           <span className="text-slate-500">{item.warna}</span>
-                          {item.telepon && <span className="flex items-center gap-1 text-slate-400 font-mono no-print"><Phone size={10} /> {item.telepon}</span>}
                         </div>
                       </td>
                       {showAllHistory && <td className="p-4 text-xs font-mono text-slate-500">{formatDateDisplay(item.date)}</td>}
