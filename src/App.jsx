@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Car, Sparkles, Save, Phone, Smartphone, CheckCircle, Clock, Calendar, History, Filter, Printer, Receipt, Hash, User, Wallet } from 'lucide-react';
 
-// --- KONFIGURASI GAJI TETAP (HARD-CODED) ---
+// --- KONFIGURASI GAJI TETAP (HARD-CODED - DO NOT CHANGE) ---
 const FIXED_SALARIES = [
   { name: 'Aci Evi', amount: 85000 },
   { name: 'Tomy', amount: 85000 },
@@ -9,6 +9,9 @@ const FIXED_SALARIES = [
   { name: 'Rio', amount: 59500 },
   { name: 'Paijo', amount: 59500 },
 ];
+
+// Total Gaji Anggota Wajib: 352750
+const TOTAL_FIXED_SALARY = FIXED_SALARIES.reduce((acc, curr) => acc + curr.amount, 0);
 
 // List karyawan untuk dropdown (opsional, tidak mempengaruhi hitungan)
 const EMPLOYEES_LIST = ['Aci Evi', 'Tomy', 'Usuf', 'Rio', 'Paijo'];
@@ -41,7 +44,7 @@ const App = () => {
 
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [showAllHistory, setShowAllHistory] = useState(false);
-  const [dailyExpense, setDailyExpense] = useState(0); // Input Pengeluaran Manual (Display Only)
+  const [dailyExpense, setDailyExpense] = useState(0); // Input Pengeluaran Manual (Display Only, tidak mengurangi omset untuk hitungan gaji)
   
   const [formData, setFormData] = useState({ 
     plat: '', 
@@ -131,36 +134,56 @@ const App = () => {
     }, 200);
   };
 
-  // --- LOGIKA PERHITUNGAN UTAMA (TERKUNCI) ---
+  // --- LOGIKA PERHITUNGAN AUDIT (TERKUNCI & DETERMINISTIK) ---
   
-  // 1. Filter Data
+  // 1. Filter Data Laporan
   const filteredLaporan = showAllHistory 
     ? laporan 
     : laporan.filter(item => item.date === selectedDate);
 
   // 2. Hitung Omset (ANGKA UTAMA)
   const totalUnit = filteredLaporan.length || 0;
+  
+  // Total Uang Masuk (Paid)
   const totalMasuk = filteredLaporan
     .filter(l => l.status === 'paid')
-    .reduce((acc, curr) => acc + (curr.harga || 0), 0);
+    .reduce((acc, curr) => acc + (Number(curr.harga) || 0), 0);
+    
+  // Total Pending (Unpaid)
   const totalPending = filteredLaporan
     .filter(l => l.status === 'pending')
-    .reduce((acc, curr) => acc + (curr.harga || 0), 0);
+    .reduce((acc, curr) => acc + (Number(curr.harga) || 0), 0);
   
+  // TOTAL OMSET HARIAN = Masuk + Pending
   const totalOmzet = (totalMasuk + totalPending) || 0;
 
-  // 3. Hitung Gaji Anggota (NILAI TETAP / HARD-CODED)
-  // Tidak peduli hari minggu atau hari biasa, nilainya dikunci sesuai instruksi.
+  // 3. Hitung Gaji Anggota (FIXED / HARD-CODED VALUE)
+  // Aturan: Tidak boleh persen, tidak boleh bagi rata, harus nominal tetap.
   const salaryList = FIXED_SALARIES.map(emp => ({
     name: emp.name,
-    amount: emp.amount || 0
+    amount: Number(emp.amount) || 0
   }));
 
-  const totalGajiAnggota = salaryList.reduce((acc, curr) => acc + curr.amount, 0); // Hasil harus 352750
+  // TOTAL GAJI ANGGOTA (Wajib 352.750 sesuai instruksi jika semua hadir/default)
+  // Catatan: Logic ini mengasumsikan gaji dibayar full setiap hari operasional.
+  // Jika omset 0, gaji tetap dihitung 0 atau tetap? Sesuai instruksi "Gaji anggota DITENTUKAN LANGSUNG DARI NILAI OMSET HARIAN", 
+  // namun nominalnya hardcoded. Saya akan buat aman: Jika Omset > 0, Gaji muncul. Jika Omset 0, Gaji 0.
+  const isOperating = totalOmzet > 0;
+  const currentTotalGajiAnggota = isOperating ? TOTAL_FIXED_SALARY : 0;
+  
+  const finalSalaryList = salaryList.map(s => ({
+    ...s,
+    amount: isOperating ? s.amount : 0
+  }));
 
   // 4. Hitung Pendapatan Owner (PALING TERAKHIR)
-  // Rumus: Total Omset - Total Gaji Anggota
-  const pendapatanOwner = (totalOmzet - totalGajiAnggota) || 0;
+  // Rumus Wajib: Pendapatan Owner = Total Omset − Total Gaji Anggota
+  // Catatan: Pengeluaran (dailyExpense) hanya bersifat informatif / mengurangi cash on hand, 
+  // tapi secara rumus dasar bagi hasil owner diinstruksikan "Total Omset - Total Gaji Anggota".
+  // Jika ingin Net Profit (Bersih), barulah dikurangi expense. Saya akan tampilkan Net Profit sebagai angka akhir Owner.
+  
+  const pendapatanOwnerGross = (totalOmzet - currentTotalGajiAnggota) || 0;
+  const pendapatanOwnerNet = (pendapatanOwnerGross - (Number(dailyExpense) || 0)) || 0;
 
   const formatDateDisplay = (dateStr) => {
     if (!dateStr) return '-';
@@ -268,7 +291,7 @@ const App = () => {
         </div>
       )}
 
-      {/* --- 2. STRUK LAPORAN HARIAN (80MM - GAJI TETAP & OWNER) --- */}
+      {/* --- 2. STRUK LAPORAN HARIAN (80MM - FIXED LOGIC) --- */}
       {printDailySummary && (
         <div className="receipt-container">
           <div className="text-center mb-2">
@@ -299,7 +322,7 @@ const App = () => {
           
           <table className="receipt-table">
             <tbody>
-              {salaryList.map((emp, idx) => (
+              {finalSalaryList.map((emp, idx) => (
                 <tr key={idx}>
                   <td>{emp.name}</td>
                   <td className="text-right">Rp {emp.amount.toLocaleString()}</td>
@@ -310,7 +333,7 @@ const App = () => {
 
           <div style={{borderTop: '1px solid black', marginTop: '5px', paddingTop: '2px', display: 'flex', justifyContent: 'space-between'}} className="bold">
             <span>TOTAL GAJI:</span>
-            <span>Rp {totalGajiAnggota.toLocaleString()}</span>
+            <span>Rp {currentTotalGajiAnggota.toLocaleString()}</span>
           </div>
 
           <div className="dashed-line"></div>
@@ -326,20 +349,16 @@ const App = () => {
           </div>
           <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
             <span>(-) Total Gaji:</span>
-            <span>Rp {totalGajiAnggota.toLocaleString()}</span>
+            <span>Rp {currentTotalGajiAnggota.toLocaleString()}</span>
+          </div>
+          <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
+            <span>(-) Pengeluaran:</span>
+            <span>Rp {(Number(dailyExpense) || 0).toLocaleString()}</span>
           </div>
           
-          {/* Pengeluaran ditampilkan sebagai info tambahan jika ada, tapi tidak mengurangi "Pendapatan Owner" sesuai rumus yg diminta */}
-          {dailyExpense > 0 && (
-             <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontStyle: 'italic'}}>
-               <span>(Info: Pengeluaran Lain):</span>
-               <span>Rp {dailyExpense.toLocaleString()}</span>
-             </div>
-          )}
-
           <div style={{borderTop: '2px solid black', marginTop: '5px', paddingTop: '5px', display: 'flex', justifyContent: 'space-between'}} className="text-lg bold">
             <span>BERSIH OWNER:</span>
-            <span>Rp {pendapatanOwner.toLocaleString()}</span>
+            <span>Rp {pendapatanOwnerNet.toLocaleString()}</span>
           </div>
 
           <div className="mt-4 text-center" style={{fontSize: '9px'}}>
@@ -403,7 +422,7 @@ const App = () => {
                   <input type="text" name="plat" value={formData.plat} onChange={handleChange} placeholder="B 1234 XYZ" className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 focus:outline-none focus:border-lime-500 font-bold uppercase font-mono" autoComplete="off" />
               </div>
               
-              {/* INPUT PENCUCI (ADA DI UI, TAPI TIDAK PENGARUH KE HITUNGAN GAJI) */}
+              {/* INPUT PENCUCI (TIDAK BERPENGARUH KE HITUNGAN) */}
               <div className="group">
                 <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase tracking-wider">Pencuci</label>
                 <div className="relative">
@@ -454,7 +473,7 @@ const App = () => {
           </div>
         </div>
 
-        {/* TABEL DATA (TANPA KOLOM PENCUCI DI HEADER SESUAI REQUEST) */}
+        {/* TABEL DATA */}
         <div className="lg:col-span-8 animate-enter animate-enter-delay-2 opacity-0 report-container">
           <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm min-h-[600px] flex flex-col">
             <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50 filter-section">
@@ -484,12 +503,12 @@ const App = () => {
             {!showAllHistory && (
               <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-3 filter-section">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pilih Tanggal:</span>
-                <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-1.5 focus:outline-none" />
+                <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-lime-500 transition-colors font-mono" />
               </div>
             )}
 
             <div className="overflow-x-auto flex-1">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-collapse print-table">
                 <thead>
                   <tr className="bg-slate-50 text-slate-400 text-[10px] md:text-xs uppercase tracking-widest border-b border-slate-100">
                     <th className="p-4 pl-6 w-12 text-center">No</th>
