@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Car, Sparkles, Save, Phone, Smartphone, CheckCircle, Clock, Calendar, History, Filter, Printer, Receipt, Hash, Wallet, User } from 'lucide-react';
+import { Plus, Trash2, Car, Sparkles, Save, Phone, Smartphone, CheckCircle, Clock, Calendar, History, Filter, Printer, Receipt, Hash, User, Wallet } from 'lucide-react';
 
 // KONFIGURASI TARIF GAJI KARYAWAN
 const EMPLOYEES = [
@@ -30,7 +30,7 @@ const App = () => {
           if (Array.isArray(parsed)) return parsed;
         }
       } catch (error) {
-        console.error(error);
+        console.error("Error loading data:", error);
       }
     }
     return [];
@@ -38,7 +38,7 @@ const App = () => {
 
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [showAllHistory, setShowAllHistory] = useState(false);
-  const [dailyExpense, setDailyExpense] = useState(0); // Pengeluaran Manual
+  const [dailyExpense, setDailyExpense] = useState(0); // Input Pengeluaran Manual
   
   const [formData, setFormData] = useState({ 
     plat: '', 
@@ -47,7 +47,7 @@ const App = () => {
     warna: '', 
     tipe: 'Full', 
     status: 'pending',
-    washer: EMPLOYEES[0].name // Default washer
+    washer: EMPLOYEES[0].name 
   });
   
   const [receiptData, setReceiptData] = useState(null);
@@ -62,7 +62,7 @@ const App = () => {
       try {
         localStorage.setItem('soniaCarWashData', JSON.stringify(laporan));
       } catch (error) {
-        console.error(error);
+        console.error("Error saving data:", error);
       }
     }
   }, [laporan]);
@@ -129,11 +129,12 @@ const App = () => {
     }, 200);
   };
 
-  // --- CALCULATIONS ---
+  // --- CALCULATIONS (LOGIKA UTAMA) ---
   const filteredLaporan = showAllHistory 
     ? laporan 
     : laporan.filter(item => item.date === selectedDate);
 
+  // 1. Hitung Total Unit & Omset
   const totalUnit = filteredLaporan.length || 0;
   
   const totalMasuk = filteredLaporan
@@ -146,40 +147,41 @@ const App = () => {
     
   const totalOmzet = totalMasuk + totalPending;
 
-  // Cek Hari Minggu
+  // 2. Cek Hari Minggu
   const isSunday = new Date(selectedDate).getDay() === 0;
 
-  // HITUNG GAJI & BAGI HASIL
+  // 3. Hitung Gaji & Bagi Hasil
   let employeeStats = [];
   let totalGajiKaryawan = 0;
   let ownerGross = 0;
   let ownerNet = 0;
 
   if (isSunday) {
-    // === LOGIKA MINGGU (Sharing Fee) ===
-    // Omzet dibagi 2: 50% Owner, 50% Anggota
+    // === LOGIKA MINGGU (Sharing Fee 50:50) ===
+    // Total Omzet dibagi 2: 50% Owner, 50% Anggota
     const poolAnggota = totalOmzet / 2;
     const gajiPerOrang = poolAnggota / 5; // Dibagi 5 orang rata
     
-    // Generate data untuk display
     employeeStats = EMPLOYEES.map(emp => ({
       name: emp.name,
-      totalGaji: gajiPerOrang
+      countFull: 0, // Tidak relevan di Minggu
+      countBody: 0, // Tidak relevan di Minggu
+      totalGaji: gajiPerOrang || 0
     }));
     
-    totalGajiKaryawan = poolAnggota;
+    totalGajiKaryawan = poolAnggota || 0;
+    
+    // Owner menerima bagiannya (50%) dikurangi pengeluaran
     ownerGross = totalOmzet / 2;
-    // Owner menerima bagian bersih setelah dikurangi pengeluaran dari bagiannya
-    // "owner menerima bagiannya secara bersih" -> Bagian Owner - Pengeluaran
-    ownerNet = ownerGross - (dailyExpense || 0);
+    ownerNet = (ownerGross - (dailyExpense || 0)) || 0;
 
   } else {
     // === LOGIKA HARIAN (Tarif per Mobil) ===
     employeeStats = EMPLOYEES.map(emp => {
-      // Cari mobil yang dikerjakan karyawan ini
+      // Hitung mobil yg dicuci karyawan ini
       const jobs = filteredLaporan.filter(l => l.washer === emp.name);
-      const countFull = jobs.filter(l => l.tipe === 'Full').length;
-      const countBody = jobs.filter(l => l.tipe === 'Body').length;
+      const countFull = jobs.filter(l => l.tipe === 'Full').length || 0;
+      const countBody = jobs.filter(l => l.tipe === 'Body').length || 0;
       
       const gaji = (countFull * emp.rateFull) + (countBody * emp.rateBody);
       
@@ -187,14 +189,14 @@ const App = () => {
         name: emp.name,
         countFull,
         countBody,
-        totalGaji: gaji
+        totalGaji: gaji || 0
       };
     });
 
-    totalGajiKaryawan = employeeStats.reduce((acc, curr) => acc + curr.totalGaji, 0);
-    // Hari biasa: Sisa Omzet - Pengeluaran - Gaji
-    ownerGross = totalOmzet; // Base calculation
-    ownerNet = totalOmzet - totalGajiKaryawan - (dailyExpense || 0);
+    totalGajiKaryawan = employeeStats.reduce((acc, curr) => acc + (curr.totalGaji || 0), 0);
+    
+    // Hari biasa: Sisa Omzet (Omzet - Gaji - Pengeluaran)
+    ownerNet = (totalOmzet - totalGajiKaryawan - (dailyExpense || 0)) || 0;
   }
 
   const formatDateDisplay = (dateStr) => {
@@ -328,7 +330,7 @@ const App = () => {
           </div>
           <div style={{display: 'flex', justifyContent: 'space-between'}}>
             <span>Belum Bayar:</span>
-            <span>Rp {totalPending.toLocaleString()}</span>
+            <span>Rp {(totalPending || 0).toLocaleString()}</span>
           </div>
           <div style={{display: 'flex', justifyContent: 'space-between'}} className="bold mt-1">
             <span>UANG MASUK:</span>
@@ -344,7 +346,7 @@ const App = () => {
           
           {isSunday && (
              <div style={{fontSize: '10px', textAlign: 'center', marginBottom: '5px'}}>
-                Omzet / 2 / 5 Anggota
+                (Total Omzet / 2) / 5 Anggota
              </div>
           )}
 
@@ -382,9 +384,9 @@ const App = () => {
           </div>
           
           {isSunday && (
-             <div style={{display: 'flex', justifyContent: 'space-between'}}>
+             <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
                <span>Bagian Owner (50%):</span>
-               <span>Rp {ownerGross.toLocaleString()}</span>
+               <span>Rp {(totalOmzet/2).toLocaleString()}</span>
              </div>
           )}
           
@@ -403,6 +405,9 @@ const App = () => {
           <div className="mt-4 text-center" style={{fontSize: '9px'}}>
             <p>Dicetak pada: {new Date().toLocaleString('id-ID')}</p>
           </div>
+          
+          <div className="h-6"></div>
+          <div className="text-center text-[8px]">.</div>
         </div>
       )}
 
@@ -430,7 +435,7 @@ const App = () => {
             <div className="flex-1 min-w-[140px] flex items-center justify-center">
                <button onClick={handlePrintDailyReport} className="bg-slate-900 hover:bg-slate-800 text-white p-4 rounded-2xl shadow-lg flex flex-col items-center gap-2 transition-all active:scale-95 w-full h-full justify-center" title="Print Laporan Harian">
                  <Printer size={24} />
-                 <span className="text-xs font-bold uppercase tracking-widest">Print Laporan</span>
+                 <span className="text-xs font-bold uppercase tracking-widest">Laporan Harian</span>
                </button>
             </div>
           </div>
