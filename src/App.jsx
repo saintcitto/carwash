@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Car, Sparkles, Save, Phone, Smartphone, CheckCircle, Clock, Calendar, History, Filter, Printer, Receipt, Hash, User, Wallet } from 'lucide-react';
+import { Plus, Trash2, Car, Sparkles, Save, Phone, Smartphone, CheckCircle, Clock, Calendar, History, Filter, Printer, Receipt, Hash, Wallet } from 'lucide-react';
 
-// --- KONFIGURASI GAJI TETAP (HARD-CODED - DO NOT CHANGE) ---
+// --- KONFIGURASI GAJI TETAP (HARD-CODED & LOCKED) ---
+// Nilai ini MUTLAK dan tidak boleh berubah berdasarkan jumlah mobil atau hari.
 const FIXED_SALARIES = [
   { name: 'Aci Evi', amount: 85000 },
   { name: 'Tomy', amount: 85000 },
@@ -10,11 +11,9 @@ const FIXED_SALARIES = [
   { name: 'Paijo', amount: 59500 },
 ];
 
-// Total Gaji Anggota Wajib: 352750
+// Total Gaji Anggota Wajib: Rp 352.750
+// Dihitung sekali saat inisialisasi untuk konsistensi.
 const TOTAL_FIXED_SALARY = FIXED_SALARIES.reduce((acc, curr) => acc + curr.amount, 0);
-
-// List karyawan untuk dropdown (opsional, tidak mempengaruhi hitungan)
-const EMPLOYEES_LIST = ['Aci Evi', 'Tomy', 'Usuf', 'Rio', 'Paijo'];
 
 const App = () => {
   // --- HELPERS ---
@@ -44,16 +43,16 @@ const App = () => {
 
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [showAllHistory, setShowAllHistory] = useState(false);
-  const [dailyExpense, setDailyExpense] = useState(0); // Input Pengeluaran Manual (Display Only, tidak mengurangi omset untuk hitungan gaji)
+  const [dailyExpense, setDailyExpense] = useState(0); // Input Pengeluaran Manual (Display Only)
   
+  // Form Data (Pencuci DIHAPUS dari sini sesuai instruksi)
   const [formData, setFormData] = useState({ 
     plat: '', 
     telepon: '', 
     mobil: '', 
     warna: '', 
     tipe: 'Full', 
-    status: 'pending',
-    washer: EMPLOYEES_LIST[0] 
+    status: 'pending'
   });
   
   const [receiptData, setReceiptData] = useState(null);
@@ -95,12 +94,11 @@ const App = () => {
       harga: harga,
       tipe: formData.tipe,
       status: formData.status,
-      washer: formData.washer, 
       isNew: true
     };
 
     setLaporan([newItem, ...laporan]);
-    setFormData({ ...formData, plat: '', telepon: '', mobil: '', warna: '', tipe: 'Full', status: 'pending' });
+    setFormData({ plat: '', telepon: '', mobil: '', warna: '', tipe: 'Full', status: 'pending' });
     
     setTimeout(() => setLaporan(prev => prev.map(item => item.id === newItem.id ? { ...item, isNew: false } : item)), 1000);
   };
@@ -155,34 +153,27 @@ const App = () => {
     .reduce((acc, curr) => acc + (Number(curr.harga) || 0), 0);
   
   // TOTAL OMSET HARIAN = Masuk + Pending
+  // Ini adalah "Single Source of Truth" untuk perhitungan selanjutnya.
   const totalOmzet = (totalMasuk + totalPending) || 0;
 
   // 3. Hitung Gaji Anggota (FIXED / HARD-CODED VALUE)
-  // Aturan: Tidak boleh persen, tidak boleh bagi rata, harus nominal tetap.
+  // Aturan: Jika Omset > 0, Gaji Anggota = 352.750 (Total dari rincian tetap).
+  // Jika Omset = 0, Gaji = 0.
+  const isOperating = totalOmzet > 0;
+  
   const salaryList = FIXED_SALARIES.map(emp => ({
     name: emp.name,
-    amount: Number(emp.amount) || 0
+    amount: isOperating ? Number(emp.amount) : 0
   }));
 
-  // TOTAL GAJI ANGGOTA (Wajib 352.750 sesuai instruksi jika semua hadir/default)
-  // Catatan: Logic ini mengasumsikan gaji dibayar full setiap hari operasional.
-  // Jika omset 0, gaji tetap dihitung 0 atau tetap? Sesuai instruksi "Gaji anggota DITENTUKAN LANGSUNG DARI NILAI OMSET HARIAN", 
-  // namun nominalnya hardcoded. Saya akan buat aman: Jika Omset > 0, Gaji muncul. Jika Omset 0, Gaji 0.
-  const isOperating = totalOmzet > 0;
-  const currentTotalGajiAnggota = isOperating ? TOTAL_FIXED_SALARY : 0;
-  
-  const finalSalaryList = salaryList.map(s => ({
-    ...s,
-    amount: isOperating ? s.amount : 0
-  }));
+  // Variabel Terkunci: Total Gaji Anggota
+  const totalGajiAnggota = isOperating ? TOTAL_FIXED_SALARY : 0;
 
   // 4. Hitung Pendapatan Owner (PALING TERAKHIR)
   // Rumus Wajib: Pendapatan Owner = Total Omset − Total Gaji Anggota
-  // Catatan: Pengeluaran (dailyExpense) hanya bersifat informatif / mengurangi cash on hand, 
-  // tapi secara rumus dasar bagi hasil owner diinstruksikan "Total Omset - Total Gaji Anggota".
-  // Jika ingin Net Profit (Bersih), barulah dikurangi expense. Saya akan tampilkan Net Profit sebagai angka akhir Owner.
+  const pendapatanOwnerGross = (totalOmzet - totalGajiAnggota) || 0;
   
-  const pendapatanOwnerGross = (totalOmzet - currentTotalGajiAnggota) || 0;
+  // Rumus Akhir (Sisa Bersih): Pendapatan Owner - Pengeluaran Harian
   const pendapatanOwnerNet = (pendapatanOwnerGross - (Number(dailyExpense) || 0)) || 0;
 
   const formatDateDisplay = (dateStr) => {
@@ -317,12 +308,12 @@ const App = () => {
 
           {/* RINCIAN GAJI ANGGOTA (FIXED) */}
           <div className="text-center bold" style={{marginBottom: '4px'}}>
-            -- RINCIAN GAJI ANGGOTA --
+            -- PEMBAGIAN ANGGOTA --
           </div>
           
           <table className="receipt-table">
             <tbody>
-              {finalSalaryList.map((emp, idx) => (
+              {salaryList.map((emp, idx) => (
                 <tr key={idx}>
                   <td>{emp.name}</td>
                   <td className="text-right">Rp {emp.amount.toLocaleString()}</td>
@@ -333,7 +324,7 @@ const App = () => {
 
           <div style={{borderTop: '1px solid black', marginTop: '5px', paddingTop: '2px', display: 'flex', justifyContent: 'space-between'}} className="bold">
             <span>TOTAL GAJI:</span>
-            <span>Rp {currentTotalGajiAnggota.toLocaleString()}</span>
+            <span>Rp {totalGajiAnggota.toLocaleString()}</span>
           </div>
 
           <div className="dashed-line"></div>
@@ -349,7 +340,7 @@ const App = () => {
           </div>
           <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
             <span>(-) Total Gaji:</span>
-            <span>Rp {currentTotalGajiAnggota.toLocaleString()}</span>
+            <span>Rp {totalGajiAnggota.toLocaleString()}</span>
           </div>
           <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
             <span>(-) Pengeluaran:</span>
@@ -357,7 +348,7 @@ const App = () => {
           </div>
           
           <div style={{borderTop: '2px solid black', marginTop: '5px', paddingTop: '5px', display: 'flex', justifyContent: 'space-between'}} className="text-lg bold">
-            <span>BERSIH OWNER:</span>
+            <span>SISA BERSIH:</span>
             <span>Rp {pendapatanOwnerNet.toLocaleString()}</span>
           </div>
 
@@ -382,64 +373,53 @@ const App = () => {
               Car Wash Management System
             </p>
           </div>
-          <div className="flex flex-wrap gap-4 w-full md:w-auto pb-2 md:pb-0">
-            <div className="flex-1 min-w-[140px] bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 animate-pop opacity-0" style={{animationDelay: '0.1s'}}>
-              <div className="bg-blue-100 p-3 rounded-xl text-blue-600"><Hash size={24} /></div>
-              <div><p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total Unit</p><p className="text-2xl font-mono font-bold text-slate-800">{totalUnit}</p></div>
-            </div>
-            <div className="flex-1 min-w-[160px] bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 animate-pop opacity-0" style={{animationDelay: '0.2s'}}>
+          <div className="flex gap-4 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+            <div className="flex-1 md:flex-none min-w-[180px] bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 animate-pop opacity-0" style={{animationDelay: '0.2s'}}>
               <div className="bg-lime-100 p-3 rounded-xl text-lime-600"><CheckCircle size={24} /></div>
-              <div><p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total Masuk</p><p className="text-2xl font-mono font-bold text-slate-800">{totalMasuk.toLocaleString()}K</p></div>
+              <div>
+                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{showAllHistory ? 'Total Masuk' : 'Masuk Hari Ini'}</p>
+                <p className="text-2xl font-mono font-bold text-slate-800">{totalMasuk.toLocaleString()}k</p>
+              </div>
             </div>
-            <div className="flex-1 min-w-[140px] flex items-center justify-center">
-               <button onClick={handlePrintDailyReport} className="bg-slate-900 hover:bg-slate-800 text-white p-4 rounded-2xl shadow-lg flex flex-col items-center gap-2 transition-all active:scale-95 w-full h-full justify-center" title="Print Laporan Harian">
-                 <Printer size={24} />
-                 <span className="text-xs font-bold uppercase tracking-widest">Print Laporan</span>
-               </button>
+            <div className="flex-1 md:flex-none min-w-[180px] bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 animate-pop opacity-0" style={{animationDelay: '0.3s'}}>
+              <div className="bg-red-100 p-3 rounded-xl text-red-500"><Clock size={24} /></div>
+              <div>
+                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{showAllHistory ? 'Total Pending' : 'Pending Hari Ini'}</p>
+                <p className="text-2xl font-mono font-bold text-slate-800">{totalPending.toLocaleString()}k</p>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8 input-section no-print">
-        {/* FORM INPUT */}
-        <div className="lg:col-span-4 space-y-6 animate-enter animate-enter-delay-1 opacity-0">
+      {/* --- PRINT HEADER (KHUSUS LAPORAN A4) --- */}
+      <div className="print-header-report w-full mb-6 border-b-2 border-slate-800 pb-4">
+        <h1 className="text-3xl font-black text-slate-900 mb-1">SONIA CAFE CAR WASH</h1>
+        <div className="flex justify-between items-end">
+          <div>
+            <p className="text-sm text-slate-600 font-bold uppercase">Laporan Transaksi</p>
+            <p className="text-sm text-slate-500">Periode: {showAllHistory ? "Semua Riwayat" : new Date(selectedDate).toLocaleDateString('id-ID', { dateStyle: 'full' })}</p>
+          </div>
+          <div className="text-right">
+             <p className="text-xs text-slate-500">Total Masuk: <span className="font-bold text-slate-900">Rp {totalMasuk.toLocaleString()}</span></p>
+             <p className="text-xs text-slate-500">Total Pending: <span className="font-bold text-red-600">Rp {totalPending.toLocaleString()}</span></p>
+          </div>
+        </div>
+      </div>
+
+      <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8 input-section">
+        {/* --- FORM INPUT --- */}
+        <div className="lg:col-span-4 space-y-6 animate-enter animate-enter-delay-1 opacity-0 no-print">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl sticky top-8">
             <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
               <div className="w-10 h-10 bg-lime-400 rounded-full flex items-center justify-center text-white shadow-lg shadow-lime-200 animate-pulse"><Plus size={24} strokeWidth={3} /></div>
               <h2 className="text-xl font-bold text-slate-800">Input Data Baru</h2>
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-4">
-                <p className="text-xs text-blue-600 font-medium flex items-center gap-2">
-                  <Calendar size={14} /> 
-                  Data masuk ke: <span className="font-bold">{new Date().toLocaleDateString('id-ID')}</span>
-                </p>
-              </div>
-
               <div className="group">
                   <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase tracking-wider">Nomor Plat</label>
                   <input type="text" name="plat" value={formData.plat} onChange={handleChange} placeholder="B 1234 XYZ" className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-3 focus:outline-none focus:border-lime-500 font-bold uppercase font-mono" autoComplete="off" />
               </div>
-              
-              {/* INPUT PENCUCI (TIDAK BERPENGARUH KE HITUNGAN) */}
-              <div className="group">
-                <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase tracking-wider">Pencuci</label>
-                <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-                  <select 
-                    name="washer" 
-                    value={formData.washer} 
-                    onChange={handleChange}
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:border-lime-500 appearance-none font-medium cursor-pointer"
-                  >
-                    {EMPLOYEES_LIST.map(emp => (
-                      <option key={emp} value={emp}>{emp}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
               <div className="group">
                 <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase tracking-wider">No. WhatsApp</label>
                 <div className="relative">
@@ -458,7 +438,7 @@ const App = () => {
                 </div>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase tracking-wider">Layanan</label>
+                <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block uppercase tracking-wider">Layanan & Status</label>
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <button type="button" onClick={() => setFormData({...formData, tipe: 'Full'})} className={`p-3 rounded-lg border text-sm font-bold flex flex-col items-center gap-1 ${formData.tipe === 'Full' ? 'bg-lime-50 border-lime-500 text-lime-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}><Sparkles size={16} /> Full</button>
                   <button type="button" onClick={() => setFormData({...formData, tipe: 'Body'})} className={`p-3 rounded-lg border text-sm font-bold flex flex-col items-center gap-1 ${formData.tipe === 'Body' ? 'bg-cyan-50 border-cyan-500 text-cyan-700' : 'bg-slate-50 border-slate-200 text-slate-400'}`}><Car size={16} /> Body</button>
@@ -473,7 +453,7 @@ const App = () => {
           </div>
         </div>
 
-        {/* TABEL DATA */}
+        {/* --- TABLE & REPORT --- */}
         <div className="lg:col-span-8 animate-enter animate-enter-delay-2 opacity-0 report-container">
           <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm min-h-[600px] flex flex-col">
             <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50 filter-section">
@@ -497,16 +477,15 @@ const App = () => {
                <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm w-auto">
                   <button onClick={() => setShowAllHistory(false)} className={`px-4 py-2 rounded-lg text-xs font-bold ${!showAllHistory ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>HARI INI</button>
                   <button onClick={() => setShowAllHistory(true)} className={`px-4 py-2 rounded-lg text-xs font-bold ${showAllHistory ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>SEMUA</button>
+                  <button onClick={handlePrintDailyReport} className="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-100 border-l border-slate-100 ml-1 pl-3 flex items-center gap-2" title="Print Laporan Harian (Thermal 80mm)"><Printer size={16} /> LAPORAN</button>
                </div>
             </div>
-            
             {!showAllHistory && (
-              <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-3 filter-section">
+              <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-3 no-print filter-section">
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Pilih Tanggal:</span>
                 <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-lime-500 transition-colors font-mono" />
               </div>
             )}
-
             <div className="overflow-x-auto flex-1">
               <table className="w-full text-left border-collapse print-table">
                 <thead>
@@ -521,33 +500,37 @@ const App = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredLaporan.map((item, index) => (
-                    <tr key={item.id} className={`hover:bg-slate-50 transition-all duration-300 group ${item.isNew ? 'new-row' : ''}`}>
-                      <td className="p-4 pl-6 text-slate-400 font-mono text-sm text-center">{index + 1}</td>
-                      <td className="p-4">
-                        <div className="font-bold text-slate-800 font-mono text-lg">{item.plat}</div>
-                        <div className="text-slate-500 text-xs flex flex-wrap items-center gap-2 mt-1">
-                          <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium border border-slate-200">{item.mobil}</span>
-                          <span className="text-slate-500">{item.warna}</span>
-                        </div>
-                      </td>
-                      {showAllHistory && <td className="p-4 text-xs font-mono text-slate-500">{formatDateDisplay(item.date)}</td>}
-                      <td className="p-4 text-center">
-                        <button onClick={() => toggleStatus(item.id)} className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1 mx-auto shadow-sm no-print ${item.status === 'paid' ? 'bg-lime-100 text-lime-700 border-lime-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
-                          {item.status === 'paid' ? 'LUNAS' : 'PENDING'}
-                        </button>
-                        <span className="hidden print:block text-xs font-bold text-center">{item.status === 'paid' ? 'LUNAS' : 'BELUM BAYAR'}</span>
-                      </td>
-                      <td className="p-4 text-right"><div className="font-mono text-slate-700 font-bold">{item.harga.toLocaleString()}</div></td>
-                      <td className="p-4 text-center">
-                          {item.tipe === 'Full' ? <span className="text-[10px] font-extrabold text-lime-700 bg-lime-100 border border-lime-200 px-2 py-1 rounded-md inline-block">FULL</span> : <span className="text-[10px] font-extrabold text-cyan-700 bg-cyan-100 border border-cyan-200 px-2 py-1 rounded-md inline-block">BODY</span>}
-                      </td>
-                      <td className="p-4 text-center no-print flex items-center justify-center gap-2">
-                        <button onClick={() => handlePrintReceipt(item)} className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg" title="Print Struk"><Receipt size={18} /></button>
-                        <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg" title="Hapus"><Trash2 size={18} /></button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredLaporan.length === 0 ? (
+                    <tr><td colSpan={showAllHistory ? 7 : 6} className="p-20 text-center text-slate-400 italic">Tidak ada data...</td></tr>
+                  ) : (
+                    filteredLaporan.map((item, index) => (
+                      <tr key={item.id} className={`hover:bg-slate-50 transition-all duration-300 group ${item.isNew ? 'new-row' : ''}`}>
+                        <td className="p-4 pl-6 text-slate-400 font-mono text-sm text-center">{index + 1}</td>
+                        <td className="p-4">
+                          <div className="font-bold text-slate-800 font-mono text-lg">{item.plat}</div>
+                          <div className="text-slate-500 text-xs flex flex-wrap items-center gap-2 mt-1">
+                            <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium border border-slate-200">{item.mobil}</span>
+                            <span className="text-slate-500">{item.warna}</span>
+                          </div>
+                        </td>
+                        {showAllHistory && <td className="p-4 text-xs font-mono text-slate-500">{formatDateDisplay(item.date)}</td>}
+                        <td className="p-4 text-center">
+                          <button onClick={() => toggleStatus(item.id)} className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center gap-1 mx-auto shadow-sm no-print ${item.status === 'paid' ? 'bg-lime-100 text-lime-700 border-lime-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                            {item.status === 'paid' ? 'LUNAS' : 'PENDING'}
+                          </button>
+                          <span className="print-only hidden text-xs font-bold text-center">{item.status === 'paid' ? 'LUNAS' : 'BELUM BAYAR'}</span>
+                        </td>
+                        <td className="p-4 text-right"><div className="font-mono text-slate-700 font-bold">{item.harga.toLocaleString()}</div></td>
+                        <td className="p-4 text-center">
+                            {item.tipe === 'Full' ? <span className="text-[10px] font-extrabold text-lime-700 bg-lime-100 border border-lime-200 px-2 py-1 rounded-md inline-block">FULL</span> : <span className="text-[10px] font-extrabold text-cyan-700 bg-cyan-100 border border-cyan-200 px-2 py-1 rounded-md inline-block">BODY</span>}
+                        </td>
+                        <td className="p-4 text-center no-print flex items-center justify-center gap-2">
+                          <button onClick={() => handlePrintReceipt(item)} className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg" title="Print Struk"><Receipt size={18} /></button>
+                          <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg" title="Hapus"><Trash2 size={18} /></button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
