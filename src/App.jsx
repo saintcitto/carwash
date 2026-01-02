@@ -163,7 +163,7 @@ const App = () => {
     
     const newExpense = {
         id: Date.now(),
-        date: getTodayString(),
+        date: selectedDate, // Simpan sesuai tanggal yang dipilih/hari ini
         name: expenseForm.name,
         amount: Number(expenseForm.amount),
         note: expenseForm.note
@@ -171,7 +171,13 @@ const App = () => {
     
     setExpenses([...expenses, newExpense]);
     setExpenseForm({ name: '', amount: '', note: '' });
-    setShowExpenseModal(false);
+    // setShowExpenseModal(false); // Jangan tutup modal, biar user bisa lihat list
+  };
+
+  const handleDeleteExpense = (id) => {
+    if (window.confirm('Hapus pengeluaran ini?')) {
+      setExpenses(expenses.filter(item => item.id !== id));
+    }
   };
 
   const filteredLaporan = showAllHistory 
@@ -181,6 +187,9 @@ const App = () => {
   const filteredExpenses = showAllHistory
     ? expenses
     : expenses.filter(item => item.date === selectedDate);
+    
+  // Filter expenses khusus untuk tampilan di modal (selalu per hari ini/tanggal terpilih)
+  const modalExpenses = expenses.filter(item => item.date === selectedDate);
 
   const totalUnit = filteredLaporan.length || 0;
   
@@ -275,6 +284,8 @@ const App = () => {
             border-radius: 16px;
             width: 90%;
             max-width: 400px;
+            max-height: 90vh; /* Agar bisa scroll jika list panjang */
+            overflow-y: auto;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
       `}</style>
@@ -282,11 +293,13 @@ const App = () => {
       {showExpenseModal && (
         <div className="modal-overlay no-print">
             <div className="modal-content animate-pop">
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center mb-4 border-b pb-2">
                     <h3 className="text-lg font-bold text-slate-800">Pengeluaran</h3>
                     <button onClick={() => setShowExpenseModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
                 </div>
-                <div className="space-y-4">
+                
+                {/* Form Input */}
+                <div className="space-y-4 mb-6">
                     <div>
                         <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Nama Barang / Keperluan</label>
                         <input 
@@ -321,9 +334,35 @@ const App = () => {
                         />
                     </div>
                     <div className="flex gap-2 pt-2">
-                        <button onClick={() => setShowExpenseModal(false)} className="flex-1 py-2 rounded-lg border border-slate-200 text-slate-600 font-bold hover:bg-slate-50">Batal</button>
-                        <button onClick={handleSaveExpense} className="flex-1 py-2 rounded-lg bg-slate-900 text-white font-bold hover:bg-slate-800">Simpan</button>
+                        <button onClick={handleSaveExpense} className="w-full py-2 rounded-lg bg-slate-900 text-white font-bold hover:bg-slate-800">Simpan</button>
                     </div>
+                </div>
+
+                {/* List Pengeluaran Hari Ini */}
+                <div className="border-t pt-4">
+                    <h4 className="text-sm font-bold text-slate-700 mb-3 uppercase">Daftar Pengeluaran ({formatDateDisplay(selectedDate)})</h4>
+                    {modalExpenses.length === 0 ? (
+                        <p className="text-center text-slate-400 text-xs italic py-4">Belum ada pengeluaran tercatat.</p>
+                    ) : (
+                        <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                            {modalExpenses.map((item) => (
+                                <div key={item.id} className="flex justify-between items-start bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                    <div>
+                                        <p className="text-sm font-bold text-slate-800">{item.name}</p>
+                                        <p className="text-xs text-slate-500">Rp {item.amount.toLocaleString()}</p>
+                                        {item.note && <p className="text-[10px] text-slate-400 italic">"{item.note}"</p>}
+                                    </div>
+                                    <button 
+                                        onClick={() => handleDeleteExpense(item.id)} 
+                                        className="text-red-400 hover:text-red-600 p-1"
+                                        title="Hapus Pengeluaran"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
