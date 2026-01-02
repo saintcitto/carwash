@@ -1,20 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Car, Sparkles, Save, Phone, Smartphone, CheckCircle, Clock, Calendar, History, Filter, Printer, Receipt, Hash, Wallet } from 'lucide-react';
+import { Plus, Trash2, Car, Sparkles, Save, Phone, Smartphone, CheckCircle, Clock, Calendar, History, Filter, Printer, Receipt, Hash, Wallet, X } from 'lucide-react';
 
-// --- KONFIGURASI TARIF PER LAYANAN (AUDITED & LOCKED) ---
-// Skema pembagian nominal per transaksi untuk anggota.
 const SERVICE_RATES = {
   'Aci Evi':   { Full: 5000, Body: 5000 },
   'Bang Tomy': { Full: 5000, Body: 4000 },
   'Usuf':      { Full: 3750, Body: 2500 },
-  'Rio':       { Full: 2500, Body: 2500 }, // Sesuai instruksi teks terbaru
-  'Paijo':     { Full: 2500, Body: 2500 }, // Sesuai instruksi teks terbaru
+  'Rio':       { Full: 2500, Body: 2500 },
+  'Paijo':     { Full: 2500, Body: 2500 },
 };
 
 const EMPLOYEES_LIST = Object.keys(SERVICE_RATES);
 
 const App = () => {
-  // --- HELPERS ---
   const getTodayString = () => {
     const d = new Date();
     const year = d.getFullYear();
@@ -23,7 +20,6 @@ const App = () => {
     return `${year}-${month}-${day}`;
   };
 
-  // --- STATE ---
   const [laporan, setLaporan] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -33,7 +29,22 @@ const App = () => {
           if (Array.isArray(parsed)) return parsed;
         }
       } catch (error) {
-        console.error("Error loading data:", error);
+        console.error(error);
+      }
+    }
+    return [];
+  });
+
+  const [expenses, setExpenses] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedData = localStorage.getItem('soniaCarWashExpenses');
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (error) {
+        console.error(error);
       }
     }
     return [];
@@ -41,9 +52,7 @@ const App = () => {
 
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [showAllHistory, setShowAllHistory] = useState(false);
-  const [dailyExpense, setDailyExpense] = useState(0); 
   
-  // HAPUS FIELD WASHER DARI STATE FORM (Fitur Pencuci Dihilangkan)
   const [formData, setFormData] = useState({ 
     plat: '', 
     telepon: '', 
@@ -55,22 +64,32 @@ const App = () => {
   
   const [receiptData, setReceiptData] = useState(null);
   const [printDailySummary, setPrintDailySummary] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [expenseForm, setExpenseForm] = useState({ name: '', amount: '' });
 
   const HARGA_FULL = 50000;
-  const HARGA_BODY = 40000;
+  const HARGA_BODY = 35000;
 
-  // --- EFFECTS ---
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem('soniaCarWashData', JSON.stringify(laporan));
       } catch (error) {
-        console.error("Error saving data:", error);
+        console.error(error);
       }
     }
   }, [laporan]);
 
-  // --- HANDLERS ---
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('soniaCarWashExpenses', JSON.stringify(expenses));
+      } catch (error) {
+        console.error(error);
+      }
+    }
+  }, [expenses]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === 'telepon' && !/^\d*$/.test(value)) return;
@@ -92,7 +111,6 @@ const App = () => {
       harga: harga,
       tipe: formData.tipe,
       status: formData.status,
-      // Field washer dihapus dari objek data
       isNew: true
     };
 
@@ -112,7 +130,6 @@ const App = () => {
     setLaporan(laporan.map(item => item.id === id ? { ...item, status: item.status === 'paid' ? 'pending' : 'paid' } : item));
   };
 
-  // --- LOGIC PRINTING ---
   const handlePrintReceipt = (item) => {
     setReceiptData(item);
     setPrintDailySummary(false);
@@ -131,17 +148,41 @@ const App = () => {
     }, 200);
   };
 
-  // --- LOGIKA PERHITUNGAN AUDIT (TERKUNCI & DETERMINISTIK) ---
-  
-  // 1. Filter Data Laporan
+  const handleExpenseChange = (e) => {
+    const { name, value } = e.target;
+    if (name === 'amount') {
+        const numValue = value.replace(/[^0-9]/g, '');
+        setExpenseForm({ ...expenseForm, amount: numValue });
+    } else {
+        setExpenseForm({ ...expenseForm, [name]: value });
+    }
+  };
+
+  const handleSaveExpense = () => {
+    if (!expenseForm.name || !expenseForm.amount) return;
+    
+    const newExpense = {
+        id: Date.now(),
+        date: getTodayString(),
+        name: expenseForm.name,
+        amount: Number(expenseForm.amount)
+    };
+    
+    setExpenses([...expenses, newExpense]);
+    setExpenseForm({ name: '', amount: '' });
+    setShowExpenseModal(false);
+  };
+
   const filteredLaporan = showAllHistory 
     ? laporan 
     : laporan.filter(item => item.date === selectedDate);
 
-  // 2. Hitung Omset (ANGKA UTAMA)
+  const filteredExpenses = showAllHistory
+    ? expenses
+    : expenses.filter(item => item.date === selectedDate);
+
   const totalUnit = filteredLaporan.length || 0;
   
-  // Hitung jumlah tipe layanan untuk kalkulasi gaji (Service-Based)
   const countFull = filteredLaporan.filter(l => l.tipe === 'Full').length || 0;
   const countBody = filteredLaporan.filter(l => l.tipe === 'Body').length || 0;
 
@@ -153,11 +194,9 @@ const App = () => {
     .filter(l => l.status === 'pending')
     .reduce((acc, curr) => acc + (Number(curr.harga) || 0), 0);
   
-  // TOTAL OMSET HARIAN = Masuk + Pending
   const totalOmzet = (totalMasuk + totalPending) || 0;
+  const totalExpense = filteredExpenses.reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
-  // 3. Hitung Pembagian Anggota (BERBASIS LAYANAN / SERVICE-BASED)
-  // Tidak ada input pencuci individu. Semua anggota mendapat bagian dari setiap mobil yang dicuci.
   const memberShares = EMPLOYEES_LIST.map(name => {
     const rates = SERVICE_RATES[name];
     const shareFromFull = countFull * rates.Full;
@@ -167,19 +206,9 @@ const App = () => {
     return { name, amount: totalShare };
   });
 
-  // TOTAL PEMBAGIAN ANGGOTA (VARIABLE DIKUNCI SEBELUM MENGHITUNG OWNER)
   const totalPembagianAnggota = memberShares.reduce((acc, curr) => acc + curr.amount, 0);
-
-  // 4. Hitung Pendapatan Owner (PALING TERAKHIR)
-  // Rumus Wajib: Pendapatan Owner = Total Omset − Total Pembagian Anggota
   const pendapatanOwnerGross = (totalOmzet - totalPembagianAnggota) || 0;
-  
-  // 5. Pengeluaran (Input Manual)
-  // Diperlakukan sebagai angka positif murni untuk mengurangi kas di tangan owner (Sisa Bersih)
-  const expenseValue = Math.abs(Number(dailyExpense) || 0); // Pastikan positif
-  
-  // Sisa Bersih Owner (Net Profit)
-  const pendapatanOwnerNet = (pendapatanOwnerGross - expenseValue) || 0;
+  const pendapatanOwnerNet = (pendapatanOwnerGross - totalExpense) || 0;
 
   const formatDateDisplay = (dateStr) => {
     if (!dateStr) return '-';
@@ -189,7 +218,6 @@ const App = () => {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans p-4 md:p-8 flex flex-col items-center overflow-x-hidden">
       
-      {/* CSS STYLES - KHUSUS THERMAL 80MM */}
       <style>{`
         @keyframes slideInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 50% { transform: scale(1.05); } 100% { transform: scale(1); opacity: 1; } }
@@ -202,11 +230,10 @@ const App = () => {
           .no-print, header, .input-section, .filter-section, button { display: none !important; }
           * { visibility: visible !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           
-          /* CONTAINER STRUK */
           .receipt-container { 
             display: block !important; 
             width: 100%; 
-            max-width: 72mm !important; /* Margin aman printer 80mm */
+            max-width: 72mm !important;
             margin: 0 auto !important;
             padding: 5px 0 20px 0 !important;
             font-family: 'Courier New', monospace; 
@@ -216,7 +243,6 @@ const App = () => {
             color: #000 !important;
           }
           
-          /* TABEL DLM STRUK */
           .receipt-table { width: 100%; border-collapse: collapse; margin-top: 5px; }
           .receipt-table th { text-align: left; border-bottom: 1px dashed black; padding: 2px 0; }
           .receipt-table td { text-align: left; padding: 2px 0; vertical-align: top; }
@@ -229,9 +255,69 @@ const App = () => {
           .text-xl { font-size: 16px; }
         }
         .receipt-container { display: none; }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
       `}</style>
 
-      {/* --- 1. STRUK TRANSAKSI (PER MOBIL) --- */}
+      {showExpenseModal && (
+        <div className="modal-overlay no-print">
+            <div className="modal-content animate-pop">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-slate-800">Catat Pengeluaran</h3>
+                    <button onClick={() => setShowExpenseModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+                </div>
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Nama Barang / Keperluan</label>
+                        <input 
+                            type="text" 
+                            name="name"
+                            value={expenseForm.name}
+                            onChange={handleExpenseChange}
+                            placeholder="Contoh: Sabun, Listrik..."
+                            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2 focus:outline-none focus:border-slate-400"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Harga Barang (Rp)</label>
+                        <input 
+                            type="text" 
+                            name="amount"
+                            value={expenseForm.amount}
+                            onChange={handleExpenseChange}
+                            placeholder="0"
+                            className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-4 py-2 focus:outline-none focus:border-slate-400"
+                        />
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                        <button onClick={() => setShowExpenseModal(false)} className="flex-1 py-2 rounded-lg border border-slate-200 text-slate-600 font-bold hover:bg-slate-50">Batal</button>
+                        <button onClick={handleSaveExpense} className="flex-1 py-2 rounded-lg bg-slate-900 text-white font-bold hover:bg-slate-800">Simpan</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
       {receiptData && !printDailySummary && (
         <div className="receipt-container">
           <div className="text-center mb-2">
@@ -287,7 +373,6 @@ const App = () => {
         </div>
       )}
 
-      {/* --- 2. STRUK LAPORAN HARIAN (80MM - AUDIT LOGIC) --- */}
       {printDailySummary && (
         <div className="receipt-container">
           <div className="text-center mb-2">
@@ -305,13 +390,11 @@ const App = () => {
 
           <div className="dashed-line"></div>
 
-          {/* TOTAL OMSET (ANGKA UTAMA) */}
           <div className="text-lg bold" style={{textAlign: 'center', marginBottom: '4px'}}>TOTAL OMSET</div>
           <div className="text-xl bold" style={{textAlign: 'center'}}>Rp {totalOmzet.toLocaleString()}</div>
           
           <div className="dashed-line"></div>
 
-          {/* RINCIAN PEMBAGIAN ANGGOTA */}
           <div className="text-center bold" style={{marginBottom: '4px'}}>
             -- PEMBAGIAN ANGGOTA --
           </div>
@@ -334,7 +417,6 @@ const App = () => {
 
           <div className="dashed-line"></div>
 
-          {/* PENDAPATAN OWNER (HITUNGAN TERAKHIR) */}
           <div className="text-center bold" style={{marginTop: '5px', marginBottom: '4px'}}>
             -- PENDAPATAN OWNER --
           </div>
@@ -357,7 +439,7 @@ const App = () => {
 
           <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
             <span>(-) Pengeluaran:</span>
-            <span>Rp {expenseValue.toLocaleString()}</span>
+            <span>Rp {totalExpense.toLocaleString()}</span>
           </div>
           
           <div style={{borderTop: '2px solid black', marginTop: '5px', paddingTop: '5px', display: 'flex', justifyContent: 'space-between'}} className="text-lg bold">
@@ -374,7 +456,6 @@ const App = () => {
         </div>
       )}
 
-      {/* --- UI DASHBOARD WEB (INPUT & TABEL) --- */}
       <header className="w-full max-w-7xl mb-10 border-b border-slate-200 pb-8 animate-enter opacity-0 no-print">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div>
@@ -391,27 +472,21 @@ const App = () => {
               <div className="bg-lime-100 p-3 rounded-xl text-lime-600"><CheckCircle size={24} /></div>
               <div>
                 <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{showAllHistory ? 'Total Masuk' : 'Masuk Hari Ini'}</p>
-                <p className="text-2xl font-mono font-bold text-slate-800">{totalMasuk.toLocaleString()}K</p>
+                <p className="text-2xl font-mono font-bold text-slate-800">{totalMasuk.toLocaleString()}k</p>
               </div>
             </div>
             <div className="flex-1 md:flex-none min-w-[180px] bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 animate-pop opacity-0" style={{animationDelay: '0.3s'}}>
               <div className="bg-red-100 p-3 rounded-xl text-red-500"><Clock size={24} /></div>
               <div>
                 <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{showAllHistory ? 'Total Pending' : 'Pending Hari Ini'}</p>
-                <p className="text-2xl font-mono font-bold text-slate-800">{totalPending.toLocaleString()}K</p>
+                <p className="text-2xl font-mono font-bold text-slate-800">{totalPending.toLocaleString()}k</p>
               </div>
             </div>
           </div>
         </div>
       </header>
 
-      {/* --- PRINT HEADER (KHUSUS LAPORAN A4 - TIDAK DIPAKAI, TAPI DISIMPAN JIKA ADA REQUEST GANTI UKURAN) --- */}
-      <div className="print-header-report w-full mb-6 border-b-2 border-slate-800 pb-4 no-print">
-          {/* Bagian ini disembunyikan karena kita fokus ke Thermal 80mm */}
-      </div>
-
       <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8 input-section">
-        {/* --- FORM INPUT (TANPA INPUT PENCUCI) --- */}
         <div className="lg:col-span-4 space-y-6 animate-enter animate-enter-delay-1 opacity-0 no-print">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl sticky top-8">
             <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
@@ -456,7 +531,6 @@ const App = () => {
           </div>
         </div>
 
-        {/* --- TABLE & REPORT --- */}
         <div className="lg:col-span-8 animate-enter animate-enter-delay-2 opacity-0 report-container">
           <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm min-h-[600px] flex flex-col">
             <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50 filter-section">
@@ -465,17 +539,9 @@ const App = () => {
                   <p className="text-slate-500 text-xs mt-1">{showAllHistory ? 'Semua Riwayat' : `Tanggal: ${new Date(selectedDate).toLocaleDateString('id-ID', { dateStyle: 'long' })}`}</p>
                </div>
                
-               {/* INPUT PENGELUARAN MANUAL (Number Only, Positive) */}
-               <div className="flex items-center gap-2 bg-white border border-slate-200 p-1 rounded-xl shadow-sm">
+               <div className="flex items-center gap-2 bg-white border border-slate-200 p-1 rounded-xl shadow-sm cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => setShowExpenseModal(true)}>
                   <div className="pl-3 text-slate-400"><Wallet size={16} /></div>
-                  <input 
-                    type="number" 
-                    value={dailyExpense} 
-                    onChange={(e) => setDailyExpense(Math.abs(Number(e.target.value)) || 0)} // Force positive
-                    placeholder="Pengeluaran (Rp)..." 
-                    className="w-32 text-sm py-1.5 focus:outline-none"
-                    min="0"
-                  />
+                  <div className="text-sm text-slate-500 px-2 py-1.5 font-medium">Catat Pengeluaran</div>
                </div>
 
                <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm w-auto">
