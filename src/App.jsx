@@ -5,8 +5,8 @@ const SERVICE_RATES = {
   'Aci Evi':   { Full: 5000, Body: 5000 },
   'Bang Tomy': { Full: 5000, Body: 4000 },
   'Usuf':      { Full: 3750, Body: 2500 },
-  'Rio':       { Full: 2500, Body: 2500 },
-  'Paijo':     { Full: 2500, Body: 2500 },
+  'Rio':       { Full: 3500, Body: 2500 },
+  'Paijo':     { Full: 3500, Body: 2500 },
 };
 
 const EMPLOYEES_LIST = Object.keys(SERVICE_RATES);
