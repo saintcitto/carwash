@@ -534,14 +534,14 @@ const App = () => {
               <div className="bg-lime-100 p-3 rounded-xl text-lime-600"><CheckCircle size={24} /></div>
               <div>
                 <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{showAllHistory ? 'Total Masuk' : 'Masuk Hari Ini'}</p>
-                <p className="text-2xl font-mono font-bold text-slate-800">{totalMasuk.toLocaleString()}K</p>
+                <p className="text-2xl font-mono font-bold text-slate-800">{totalMasuk.toLocaleString()}k</p>
               </div>
             </div>
             <div className="flex-1 md:flex-none min-w-[180px] bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 animate-pop opacity-0" style={{animationDelay: '0.3s'}}>
               <div className="bg-red-100 p-3 rounded-xl text-red-500"><Clock size={24} /></div>
               <div>
                 <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{showAllHistory ? 'Total Pending' : 'Pending Hari Ini'}</p>
-                <p className="text-2xl font-mono font-bold text-slate-800">{totalPending.toLocaleString()}K</p>
+                <p className="text-2xl font-mono font-bold text-slate-800">{totalPending.toLocaleString()}k</p>
               </div>
             </div>
           </div>
