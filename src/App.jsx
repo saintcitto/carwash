@@ -5,8 +5,8 @@ const SERVICE_RATES = {
   'Aci Evi':   { Full: 5000, Body: 5000 },
   'Bang Tomy': { Full: 5000, Body: 4000 },
   'Usuf':      { Full: 3750, Body: 2500 },
-  'Rio':       { Full: 3500, Body: 2500 },
-  'Paijo':     { Full: 3500, Body: 2500 },
+  'Rio':       { Full: 2500, Body: 2500 },
+  'Paijo':     { Full: 2500, Body: 2500 },
 };
 
 const EMPLOYEES_LIST = Object.keys(SERVICE_RATES);
@@ -68,7 +68,7 @@ const App = () => {
   const [expenseForm, setExpenseForm] = useState({ name: '', amount: '', note: '' });
 
   const HARGA_FULL = 50000;
-  const HARGA_BODY = 40000;
+  const HARGA_BODY = 35000;
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -105,7 +105,7 @@ const App = () => {
       id: Date.now(),
       date: getTodayString(),
       plat: formData.plat.toUpperCase(),
-      telepon: formData.telepon,
+      telepon: formData.telepon, // FIX: Data telepon sekarang disertakan saat save
       mobil: formData.mobil,
       warna: formData.warna,
       harga: harga,
@@ -163,7 +163,7 @@ const App = () => {
     
     const newExpense = {
         id: Date.now(),
-        date: selectedDate, // Simpan sesuai tanggal yang dipilih/hari ini
+        date: selectedDate, 
         name: expenseForm.name,
         amount: Number(expenseForm.amount),
         note: expenseForm.note
@@ -171,7 +171,6 @@ const App = () => {
     
     setExpenses([...expenses, newExpense]);
     setExpenseForm({ name: '', amount: '', note: '' });
-    // setShowExpenseModal(false); // Jangan tutup modal, biar user bisa lihat list
   };
 
   const handleDeleteExpense = (id) => {
@@ -188,7 +187,6 @@ const App = () => {
     ? expenses
     : expenses.filter(item => item.date === selectedDate);
     
-  // Filter expenses khusus untuk tampilan di modal (selalu per hari ini/tanggal terpilih)
   const modalExpenses = expenses.filter(item => item.date === selectedDate);
 
   const totalUnit = filteredLaporan.length || 0;
@@ -284,7 +282,7 @@ const App = () => {
             border-radius: 16px;
             width: 90%;
             max-width: 400px;
-            max-height: 90vh; /* Agar bisa scroll jika list panjang */
+            max-height: 90vh; 
             overflow-y: auto;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
@@ -298,7 +296,6 @@ const App = () => {
                     <button onClick={() => setShowExpenseModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
                 </div>
                 
-                {/* Form Input */}
                 <div className="space-y-4 mb-6">
                     <div>
                         <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Nama Barang / Keperluan</label>
@@ -338,7 +335,6 @@ const App = () => {
                     </div>
                 </div>
 
-                {/* List Pengeluaran Hari Ini */}
                 <div className="border-t pt-4">
                     <h4 className="text-sm font-bold text-slate-700 mb-3 uppercase">Daftar Pengeluaran ({formatDateDisplay(selectedDate)})</h4>
                     {modalExpenses.length === 0 ? (
@@ -534,14 +530,14 @@ const App = () => {
               <div className="bg-lime-100 p-3 rounded-xl text-lime-600"><CheckCircle size={24} /></div>
               <div>
                 <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{showAllHistory ? 'Total Masuk' : 'Masuk Hari Ini'}</p>
-                <p className="text-2xl font-mono font-bold text-slate-800">{totalMasuk.toLocaleString()}k</p>
+                <p className="text-2xl font-mono font-bold text-slate-800">{totalMasuk.toLocaleString()}K</p>
               </div>
             </div>
             <div className="flex-1 md:flex-none min-w-[180px] bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 animate-pop opacity-0" style={{animationDelay: '0.3s'}}>
               <div className="bg-red-100 p-3 rounded-xl text-red-500"><Clock size={24} /></div>
               <div>
                 <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{showAllHistory ? 'Total Pending' : 'Pending Hari Ini'}</p>
-                <p className="text-2xl font-mono font-bold text-slate-800">{totalPending.toLocaleString()}k</p>
+                <p className="text-2xl font-mono font-bold text-slate-800">{totalPending.toLocaleString()}K</p>
               </div>
             </div>
           </div>
@@ -640,6 +636,7 @@ const App = () => {
                         <div className="text-slate-500 text-xs flex flex-wrap items-center gap-2 mt-1">
                           <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium border border-slate-200">{item.mobil}</span>
                           <span className="text-slate-500">{item.warna}</span>
+                          {item.telepon && <span className="flex items-center gap-1 text-slate-400 font-mono no-print"><Phone size={10} /> {item.telepon}</span>}
                         </div>
                       </td>
                       {showAllHistory && <td className="p-4 text-xs font-mono text-slate-500">{formatDateDisplay(item.date)}</td>}
