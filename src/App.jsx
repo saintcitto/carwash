@@ -179,6 +179,8 @@ const App = () => {
     }
   };
 
+  // --- LOGIKA UTAMA (BUSINESS LOGIC) ---
+
   const filteredLaporan = showAllHistory 
     ? laporan 
     : laporan.filter(item => item.date === selectedDate);
@@ -191,9 +193,11 @@ const App = () => {
 
   const totalUnit = filteredLaporan.length || 0;
   
+  // Hitung jumlah tipe layanan (Untuk Hari Biasa)
   const countFull = filteredLaporan.filter(l => l.tipe === 'Full').length || 0;
   const countBody = filteredLaporan.filter(l => l.tipe === 'Body').length || 0;
 
+  // Hitung Omset
   const totalMasuk = filteredLaporan
     .filter(l => l.status === 'paid')
     .reduce((acc, curr) => acc + (Number(curr.harga) || 0), 0);
@@ -205,29 +209,49 @@ const App = () => {
   const totalOmzet = (totalMasuk + totalPending) || 0;
   const totalExpense = filteredExpenses.reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
-  // LOGIKA HARI MINGGU vs HARI BIASA
+  // DETEKSI HARI MINGGU
   const isSunday = new Date(selectedDate).getDay() === 0;
 
   let memberShares = [];
   let totalPembagianAnggota = 0;
   let pendapatanOwnerGross = 0;
+  let pendapatanOwnerNet = 0;
 
   if (isSunday) {
-    // === MINGGU (BAGI HASIL 50:50) ===
-    // Total Omzet dibagi 2: 50% Owner, 50% Anggota
-    const poolAnggota = totalOmzet / 2;
-    const gajiPerOrang = poolAnggota / 5; // Dibagi 5 orang rata
+    // === LOGIKA HARI MINGGU (50:50 dari NET) ===
+    // 1. Hitung Omset Bersih (Net Omzet)
+    const netOmzet = totalOmzet - totalExpense;
+    
+    // Pastikan tidak negatif untuk pembagian
+    const safeNetOmzet = netOmzet > 0 ? netOmzet : 0;
+
+    // 2. Bagi Dua (50% Owner, 50% Pool Karyawan)
+    const poolKaryawan = safeNetOmzet / 2;
+    const ownerShare = safeNetOmzet / 2;
+
+    // 3. Bagi Rata ke Anggota
+    const totalAnggota = EMPLOYEES_LIST.length; // 5 Orang
+    const sharePerPerson = poolKaryawan / totalAnggota;
 
     memberShares = EMPLOYEES_LIST.map(name => ({
       name: name,
-      amount: gajiPerOrang
+      amount: sharePerPerson
     }));
 
-    totalPembagianAnggota = poolAnggota;
-    pendapatanOwnerGross = totalOmzet / 2;
+    totalPembagianAnggota = poolKaryawan;
+    
+    // Owner Net di hari Minggu adalah 50% hasil bagi tadi (karena pengeluaran sudah dipotong di awal)
+    // Namun untuk konsistensi variabel display di bawah:
+    pendapatanOwnerNet = ownerShare; 
+    
+    // Untuk display Gross di hari Minggu, kita bisa anggap Gross = Net karena exp sudah dihandle di awal
+    // Atau Gross = totalOmzet/2 (tapi ini jadi tidak balance kalau exp besar).
+    // Mengikuti alur "Sisa Bersih":
+    pendapatanOwnerGross = ownerShare; 
 
   } else {
-    // === HARI BIASA (SERVICE BASED) ===
+    // === LOGIKA HARI BIASA (SERVICE BASED) ===
+    // Tetap menggunakan logika lama (Rate per mobil)
     memberShares = EMPLOYEES_LIST.map(name => {
       const rates = SERVICE_RATES[name];
       const shareFromFull = countFull * rates.Full;
@@ -238,10 +262,13 @@ const App = () => {
     });
 
     totalPembagianAnggota = memberShares.reduce((acc, curr) => acc + curr.amount, 0);
+    
+    // Owner = Omzet - Gaji
     pendapatanOwnerGross = (totalOmzet - totalPembagianAnggota) || 0;
+    
+    // Net Owner = Gross Owner - Pengeluaran
+    pendapatanOwnerNet = (pendapatanOwnerGross - totalExpense) || 0;
   }
-  
-  const pendapatanOwnerNet = (pendapatanOwnerGross - totalExpense) || 0;
 
   const formatDateDisplay = (dateStr) => {
     if (!dateStr) return '-';
@@ -467,8 +494,9 @@ const App = () => {
           <div className="dashed-line"></div>
 
           <div className="text-center bold" style={{marginBottom: '4px'}}>
-            {isSunday ? '-- BAGI HASIL (MINGGU) --' : '-- PEMBAGIAN ANGGOTA --'}
+            {isSunday ? '-- BAGI HASIL MINGGU --' : '-- PEMBAGIAN ANGGOTA --'}
           </div>
+          {isSunday && <div className="text-center text-[9px] mb-2">(Omzet - Exp) / 2 / 5</div>}
           
           <table className="receipt-table">
             <tbody>
@@ -512,18 +540,34 @@ const App = () => {
             -- PENDAPATAN OWNER --
           </div>
           
-          <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
-            <span>Total Omzet:</span>
-            <span>Rp {totalOmzet.toLocaleString()}</span>
-          </div>
-          <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
-            <span>(-) Pembagian:</span>
-            <span>Rp {totalPembagianAnggota.toLocaleString()}</span>
-          </div>
-          <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
-            <span>(-) Pengeluaran:</span>
-            <span>Rp {totalExpense.toLocaleString()}</span>
-          </div>
+          {/* Tampilan Detail Owner berbeda antara Minggu dan Hari Biasa */}
+          {isSunday ? (
+             <>
+                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
+                  <span>Omzet Bersih:</span>
+                  <span>Rp {(totalOmzet - totalExpense).toLocaleString()}</span>
+                </div>
+                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
+                  <span>(-) Pool Karyawan:</span>
+                  <span>Rp {totalPembagianAnggota.toLocaleString()}</span>
+                </div>
+             </>
+          ) : (
+             <>
+                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
+                  <span>Total Omzet:</span>
+                  <span>Rp {totalOmzet.toLocaleString()}</span>
+                </div>
+                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
+                  <span>(-) Pembagian:</span>
+                  <span>Rp {totalPembagianAnggota.toLocaleString()}</span>
+                </div>
+                <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '10px'}}>
+                  <span>(-) Pengeluaran:</span>
+                  <span>Rp {totalExpense.toLocaleString()}</span>
+                </div>
+             </>
+          )}
           
           <div style={{borderTop: '2px solid black', marginTop: '5px', paddingTop: '5px', display: 'flex', justifyContent: 'space-between'}} className="text-lg bold">
             <span>SISA BERSIH:</span>
