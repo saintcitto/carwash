@@ -6,7 +6,7 @@ const SERVICE_RATES = {
   'Bang Tomy': { Full: 5000, Body: 4000 },
   'Usuf':      { Full: 3750, Body: 2500 },
   'Rio':       { Full: 3500, Body: 2500 },
-  'Paijo':     { Full: 3500, Body: 2500 },
+  'Ajo':     { Full: 3500, Body: 2500 },
 };
 
 const EMPLOYEES_LIST = Object.keys(SERVICE_RATES);
@@ -105,7 +105,7 @@ const App = () => {
       id: Date.now(),
       date: getTodayString(),
       plat: formData.plat.toUpperCase(),
-      telepon: formData.telepon, // FIX: Data telepon sekarang disertakan saat save
+      telepon: formData.telepon,
       mobil: formData.mobil,
       warna: formData.warna,
       harga: harga,
@@ -205,17 +205,42 @@ const App = () => {
   const totalOmzet = (totalMasuk + totalPending) || 0;
   const totalExpense = filteredExpenses.reduce((acc, curr) => acc + (curr.amount || 0), 0);
 
-  const memberShares = EMPLOYEES_LIST.map(name => {
-    const rates = SERVICE_RATES[name];
-    const shareFromFull = countFull * rates.Full;
-    const shareFromBody = countBody * rates.Body;
-    const totalShare = shareFromFull + shareFromBody;
-    
-    return { name, amount: totalShare };
-  });
+  // LOGIKA HARI MINGGU vs HARI BIASA
+  const isSunday = new Date(selectedDate).getDay() === 0;
 
-  const totalPembagianAnggota = memberShares.reduce((acc, curr) => acc + curr.amount, 0);
-  const pendapatanOwnerGross = (totalOmzet - totalPembagianAnggota) || 0;
+  let memberShares = [];
+  let totalPembagianAnggota = 0;
+  let pendapatanOwnerGross = 0;
+
+  if (isSunday) {
+    // === MINGGU (BAGI HASIL 50:50) ===
+    // Total Omzet dibagi 2: 50% Owner, 50% Anggota
+    const poolAnggota = totalOmzet / 2;
+    const gajiPerOrang = poolAnggota / 5; // Dibagi 5 orang rata
+
+    memberShares = EMPLOYEES_LIST.map(name => ({
+      name: name,
+      amount: gajiPerOrang
+    }));
+
+    totalPembagianAnggota = poolAnggota;
+    pendapatanOwnerGross = totalOmzet / 2;
+
+  } else {
+    // === HARI BIASA (SERVICE BASED) ===
+    memberShares = EMPLOYEES_LIST.map(name => {
+      const rates = SERVICE_RATES[name];
+      const shareFromFull = countFull * rates.Full;
+      const shareFromBody = countBody * rates.Body;
+      const totalShare = shareFromFull + shareFromBody;
+      
+      return { name, amount: totalShare };
+    });
+
+    totalPembagianAnggota = memberShares.reduce((acc, curr) => acc + curr.amount, 0);
+    pendapatanOwnerGross = (totalOmzet - totalPembagianAnggota) || 0;
+  }
+  
   const pendapatanOwnerNet = (pendapatanOwnerGross - totalExpense) || 0;
 
   const formatDateDisplay = (dateStr) => {
@@ -442,7 +467,7 @@ const App = () => {
           <div className="dashed-line"></div>
 
           <div className="text-center bold" style={{marginBottom: '4px'}}>
-            -- PEMBAGIAN ANGGOTA --
+            {isSunday ? '-- BAGI HASIL (MINGGU) --' : '-- PEMBAGIAN ANGGOTA --'}
           </div>
           
           <table className="receipt-table">
