@@ -68,7 +68,7 @@ const App = () => {
   const [expenseForm, setExpenseForm] = useState({ name: '', amount: '', note: '' });
 
   const HARGA_FULL = 50000;
-  const HARGA_BODY = 35000;
+  const HARGA_BODY = 40000;
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
